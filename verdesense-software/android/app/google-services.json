@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "992833737006",
+    "project_id": "crowdsense-db",
+    "storage_bucket": "crowdsense-db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:992833737006:android:33b938d19c45288defaabf",
+        "android_client_info": {
+          "package_name": "com.example.crowd_sense"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCkQ0mvlf05BppRHeVJhuexy1U2P4HIeRM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

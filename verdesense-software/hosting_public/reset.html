@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrowdSense Secure Authentication</title>
+  <link rel="icon" type="image/png" href="logo.png">
+  <style>
+    :root {
+      --bg-dark: #0B0E14;
+      --surface-dark: #1A1F2E;
+      --primary-blue: #3b82f6;
+      --status-safe: #4CAF50;
+      --status-danger: #ef4444;
+      --text-light: #E4E4E7;
+      --text-muted: #9CA3AF;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-light);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.05), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.08), transparent 25%);
+    }
+
+    .container {
+      background-color: var(--surface-dark);
+      width: 100%;
+      max-width: 440px;
+      padding: 40px 32px;
+      border-radius: 24px;
+      border: 1px solid rgba(59, 130, 246, 0.15);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(59, 130, 246, 0.05);
+      animation: fadeUp 0.5s ease-out;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .page-wrapper {
+      width: 100%;
+      max-width: 440px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .branding-header {
+      text-align: center;
+      margin-bottom: 32px;
+      animation: fadeIn 1s ease-out;
+    }
+
+    .branding-header img {
+      width: 100px;
+      /* matched to splash screen feel */
+      height: auto;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.3));
+    }
+
+    .branding-header .app-name {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      color: white;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .branding-header .tagline {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 3.5px;
+      text-transform: uppercase;
+      opacity: 1;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    /* Precise hue matching from the logo waves */
+    .branding-header .tagline .t1 {
+      color: #FF5722;
+    }
+
+    /* Detect - Orange Wave */
+    .branding-header .tagline .t2 {
+      color: #E91E63;
+    }
+
+    /* Direct - Pink Wave */
+    .branding-header .tagline .t3 {
+      color: #673AB7;
+    }
+
+    /* Secure - Purple Wave */
+
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .icon-container {
+      width: 64px;
+      height: 64px;
+      background-color: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0 auto 20px;
+    }
+
+    .icon-container svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--primary-blue);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      background-color: var(--bg-dark);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: white;
+      font-size: 14px;
+      padding: 14px 16px 14px 44px;
+      border-radius: 12px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    input[type="password"]:focus,
+    input[type="text"]:focus {
+      border-color: var(--primary-blue);
+      background-color: var(--bg-dark);
+      /* Force dark bg even on focus */
+    }
+
+    /* Prevent browser autofill from turning background white */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-text-fill-color: white;
+      -webkit-box-shadow: 0 0 0px 1000px var(--bg-dark) inset;
+      transition: background-color 5000s ease-in-out 0s;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
+      stroke: var(--text-muted);
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      stroke: var(--text-muted);
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .toggle-password:hover {
+      stroke: white;
+    }
+
+    .requirements {
+      background-color: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 28px;
+    }
+
+    .req-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .req-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .req-item {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+
+    .req-item.met {
+      color: var(--status-safe);
+    }
+
+    .req-item svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    button {
+      width: 100%;
+      background-color: var(--status-danger);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button:disabled {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.3);
+      cursor: not-allowed;
+    }
+
+    button:not(:disabled):hover {
+      filter: brightness(1.1);
+    }
+
+    .error-msg {
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--status-danger);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .loader {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Screen States */
+    #state-loading,
+    #state-success,
+    #state-error {
+      display: none;
+      text-align: center;
+    }
+
+    #state-form {
+      display: none;
+    }
+
+    .footer-copyright {
+      margin-top: 40px;
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.25);
+      letter-spacing: 0.5px;
+      text-align: center;
+      animation: fadeIn 1.5s ease-out;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="page-wrapper">
+
+    <header class="branding-header">
+      <img src="logo.png" alt="CrowdSense Logo">
+      <div class="app-name">CrowdSense</div>
+      <div class="tagline">
+        <span class="t1">DETECT.</span>
+        <span class="t2">DIRECT.</span>
+        <span class="t3">SECURE.</span>
+      </div>
+    </header>
+
+    <div class="container">
+
+      <!-- State: Verifying Link -->
+      <div id="state-loading" style="display: block;">
+        <div class="loader"
+          style="display: block; width: 32px; height: 32px; border-width: 3px; border-top-color: var(--primary-blue); margin-bottom: 20px;">
+        </div>
+        <h1>Verifying Secure Link...</h1>
+        <p class="subtitle">Please wait while we validate your request.</p>
+      </div>
+
+      <!-- State: Invalid Link Error -->
+      <div id="state-error">
+        <div class="icon-container"
+          style="background-color: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25);">
+          <svg style="stroke: var(--status-danger);" viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h1>Link Expired or Invalid</h1>
+        <p class="subtitle" id="error-desc">This password reset link is invalid or has already been used. Please request
+          a new link from the app.</p>
+      </div>
+
+      <!-- State: Success -->
+      <div id="state-success">
+        <div class="icon-container"
+          style="background-color: rgba(76, 175, 80, 0.1); border-color: rgba(76, 175, 80, 0.25);">
+          <svg style="stroke: var(--status-safe);" viewBox="0 0 24 24">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+        </div>
+        <h1 id="success-title">Password Changed</h1>
+        <p class="subtitle" id="success-desc">Your password has been successfully updated. You can now close this window and log in to the
+          CrowdSense app with your new credentials.</p>
+      </div>
+
+      <!-- State: Main Form -->
+      <div id="state-form">
+        <div class="header">
+          <div class="icon-container">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <h1>Set New Password</h1>
+          <p class="subtitle">Please provide a strong, complex password for your <span id="user-email"
+              style="color:white; font-weight:bold;">account</span>.</p>
+        </div>
+
+        <div class="error-msg" id="form-error"></div>
+
+        <div class="form-group">
+          <label>New Password</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <input type="password" id="new-password" placeholder="Enter new password">
+            <div class="toggle-password" onclick="toggleVis('new-password', this)">
+              <!-- Eye-Off Icon (shown when masked) -->
+              <svg class="eye-closed" viewBox="0 0 24 24">
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                </path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+              <!-- Eye-Open Icon (shown when revealed/visible) -->
+              <svg class="eye-open" style="display:none;" viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" viewBox="0 0 24 24">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <input type="password" id="confirm-password" placeholder="Confirm new password">
+            <div class="toggle-password" onclick="toggleVis('confirm-password', this)">
+              <!-- Eye-Off Icon (shown when masked) -->
+              <svg class="eye-closed" viewBox="0 0 24 24">
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                </path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+              <!-- Eye-Open Icon (shown when revealed/visible) -->
+              <svg class="eye-open" style="display:none;" viewBox="0 0 24 24">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="requirements">
+          <div class="req-title">PASSWORD STRENGTH</div>
+          <div class="req-list">
+            <div class="req-item" id="req-length"><svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+              </svg> Min 8 characters</div>
+            <div class="req-item" id="req-upperlower"><svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+              </svg> Upper & Lowercase</div>
+            <div class="req-item" id="req-number"><svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+              </svg> Number (0-9)</div>
+            <div class="req-item" id="req-special"><svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+              </svg> Special Char (!@#...)</div>
+          </div>
+        </div>
+
+        <button id="submit-btn" disabled>
+          <span id="btn-text">Save New Password</span>
+          <div class="loader" id="btn-loader"></div>
+        </button>
+      </div>
+
+    </div>
+
+    <footer class="footer-copyright">
+      &copy; 2026 CrowdSense App • Intelligent Crowd Monitoring & Alert System
+    </footer>
+
+  </div>
+
+  <!-- Firebase Script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+    import { getAuth, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+
+    // CrowdSense Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyApz5IChbr4BSaXYy0q0kjp-iudn1VRYrA",
+      authDomain: "crowdsense-db.firebaseapp.com",
+      projectId: "crowdsense-db",
+      storageBucket: "crowdsense-db.firebasestorage.app",
+      messagingSenderId: "992833737006",
+      appId: "1:992833737006:web:e7ab2ea69dbc9b35efaabf"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // View Management
+    const showState = (id) => {
+      ['state-loading', 'state-error', 'state-success', 'state-form'].forEach(sid => {
+        document.getElementById(sid).style.display = (sid === id) ? 'block' : 'none';
+      });
+    };
+
+    // Get URL Parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    const actionCode = urlParams.get('oobCode');
+
+    // UI Elements
+    const p1 = document.getElementById('new-password');
+    const p2 = document.getElementById('confirm-password');
+    const btn = document.getElementById('submit-btn');
+
+    // Password Validation Check
+    const validate = () => {
+      const v = p1.value;
+      const c = p2.value;
+
+      const hasLength = v.length >= 8;
+      const hasUpperLower = /(?=.*[A-Z])(?=.*[a-z])/.test(v);
+      const hasNumber = /\d/.test(v);
+      const hasSpecial = /[\!\@\#\$\%\^\&\*\.\,\?]/.test(v); // matches dart regex
+      const match = v === c && v !== '';
+
+      const updateReq = (id, valid) => {
+        const el = document.getElementById(id);
+        if (valid) {
+          el.className = "req-item met";
+          el.innerHTML = `<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> ${el.innerText}`;
+        } else {
+          el.className = "req-item";
+          el.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> ${el.innerText}`;
+        }
+      };
+
+      updateReq('req-length', hasLength);
+      updateReq('req-upperlower', hasUpperLower);
+      updateReq('req-number', hasNumber);
+      updateReq('req-special', hasSpecial);
+
+      if (hasLength && hasUpperLower && hasNumber && hasSpecial && match) {
+        btn.disabled = false;
+        if (c !== '' && v !== c) {
+          document.getElementById('form-error').innerText = "Passwords do not match.";
+          document.getElementById('form-error').style.display = "block";
+          btn.disabled = true;
+        } else {
+          document.getElementById('form-error').style.display = "none";
+        }
+      } else {
+        btn.disabled = true;
+      }
+    };
+
+    p1.addEventListener('input', validate);
+    p2.addEventListener('input', validate);
+
+    // Toggle Visibility
+    window.toggleVis = (id, btn) => {
+      const el = document.getElementById(id);
+      const isPass = el.type === "password";
+      el.type = isPass ? "text" : "password";
+
+      // Toggle icons
+      const closedIcon = btn.querySelector('.eye-closed');
+      const openIcon = btn.querySelector('.eye-open');
+
+      if (isPass) {
+        // Now visible
+        closedIcon.style.display = 'none';
+        openIcon.style.display = 'block';
+      } else {
+        // Now masked
+        closedIcon.style.display = 'block';
+        openIcon.style.display = 'none';
+      }
+    };
+
+    // Firebase Link Verification
+    // A robust handler that supports standard modes and the custom 'mode=action' format
+    const handleAction = async () => {
+      try {
+        if (!actionCode) throw new Error("Missing action code.");
+
+        // If mode is 'action' or generic, we check the code with Firebase to see what it does
+        const requestInfo = await import("https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js")
+          .then(m => m.checkActionCode(auth, actionCode));
+        
+        const trueMode = requestInfo.operation; // PASSWORD_RESET, VERIFY_EMAIL, RECOVER_EMAIL, etc.
+        console.log("Detected Firebase Action:", trueMode);
+
+        switch (trueMode) {
+          case 'PASSWORD_RESET':
+            document.getElementById('user-email').innerText = requestInfo.data.email;
+            showState('state-form');
+            break;
+
+          case 'VERIFY_EMAIL':
+          case 'VERIFY_AND_CHANGE_EMAIL':
+            await import("https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js")
+              .then(m => m.applyActionCode(auth, actionCode));
+            document.getElementById('success-title').innerText = "Email Verified!";
+            document.getElementById('success-desc').innerText = "Your new email address has been successfully verified and updated. You may now close this window.";
+            showState('state-success');
+            break;
+
+          case 'RECOVER_EMAIL':
+            await import("https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js")
+              .then(m => m.applyActionCode(auth, actionCode));
+            document.getElementById('success-title').innerText = "Email Restored";
+            document.getElementById('success-desc').innerText = `Your account's email address has been successfully restored to ${requestInfo.data.email}.`;
+            showState('state-success');
+            break;
+
+          default:
+            throw new Error("Unsupported or unrecognized action mode.");
+        }
+      } catch (error) {
+        console.error("Action error:", error);
+        document.getElementById('error-desc').innerText = "This link is invalid, expired, or has already been used. Please try again from the app.";
+        showState('state-error');
+      }
+    };
+
+    // Execute the action handler
+    handleAction();
+
+    // Submission
+    btn.addEventListener('click', () => {
+      document.getElementById('btn-text').style.display = 'none';
+      document.getElementById('btn-loader').style.display = 'block';
+      btn.disabled = true;
+
+      confirmPasswordReset(auth, actionCode, p1.value)
+        .then(() => {
+          showState('state-success');
+        })
+        .catch((error) => {
+          document.getElementById('btn-text').style.display = 'block';
+          document.getElementById('btn-loader').style.display = 'none';
+          document.getElementById('form-error').innerText = error.message;
+          document.getElementById('form-error').style.display = "block";
+          validate(); // re-evaluates btn state
+        });
+    });
+
+  </script>
+</body>
+
+</html>

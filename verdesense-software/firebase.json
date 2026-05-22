@@ -1,0 +1,36 @@
+{
+  "hosting": {
+    "public": "hosting_public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "crowdsense-db",
+          "appId": "1:992833737006:android:33b938d19c45288defaabf",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "crowdsense-db",
+          "configurations": {
+            "android": "1:992833737006:android:33b938d19c45288defaabf",
+            "ios": "1:992833737006:ios:ca3ca4bb2a09f0c0efaabf",
+            "macos": "1:992833737006:ios:ca3ca4bb2a09f0c0efaabf",
+            "web": "1:992833737006:web:e7ab2ea69dbc9b35efaabf",
+            "windows": "1:992833737006:web:852c55d9efe4633fefaabf"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,555 @@
+// Libraries
+#include <Wire.h>
+#include <vl53l7cx_class.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <WiFiManager.h>
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include <Firebase_ESP_Client.h>
+#include <addons/TokenHelper.h>
+
+// Pin Configurations
+#define ONE_WIRE_BUS 4
+#define BACKUP_FLAME_DIGITAL 5
+#define MAIN_FLAME 14
+#define SIREN_2 25 //Alert Siren
+#define SIREN_1 26 //Clear Siren
+#define I2C_SDA 21
+#define I2C_SCL 22
+#define UPS_POWER_INDICATOR 32
+#define GAS_DIGITAL 33
+#define BACKUP_FLAME_ANALOG 34
+#define GAS 35
+#define FIREBASE_HOST "https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define FIREBASE_LEGACY_TOKEN "5mGeiwSA9PLndbFmJZtC8x7a9U78VaM0H21nh1nd"
+
+// Initializations
+VL53L7CX sensor(&Wire, -1, -1); 
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
+// --- Network Timers ---
+const unsigned long FIREBASE_SEND_INTERVAL = 300000; // 5 Minutes for full data bundle
+const unsigned long HEARTBEAT_INTERVAL = 60000;      // 1 Minute to keep Flutter App 'Online'
+unsigned long lastFirebaseSendTime = 0;
+unsigned long lastHeartbeatTime = 0;
+bool firebaseConnected = false;
+String deviceMAC = "00:00:00:00:00:00";
+String pathBase;
+
+// --- ToF Variables ---
+bool tofSuccess = false;
+const int PERSON_THRESHOLD_MM = 2500; 
+const int MIN_DISTANCE_MM = 200; 
+
+// BACKGROUND SUBTRACTION
+int baselineDistance[64] = {0};
+const int DROP_THRESHOLD_MM = 100; // 10cm sensitivity drop for heads/shoulders
+
+// --- COUNTING VARIABLES ---
+int totalInside = 0;
+int totalExits = 0;
+
+int laneState[8] = {0, 0, 0, 0, 0, 0, 0, 0}; 
+unsigned long lastEntryTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+unsigned long lastExitTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+const int EVENT_COOLDOWN_MS = 800; 
+const int CLUSTER_MERGE_MS = 500; 
+
+uint8_t zoneOccupancyCount[64] = {0};
+const uint8_t MIN_FRAMES_OCCUPIED = 1;
+
+// Environment Variables
+bool esp32Online = true; 
+
+// Siren Variables
+bool sirenAlertActive = false;
+bool sirenClearActive = false;
+bool autoTriggered = false; 
+unsigned long sirenAlertDuration = 0;
+unsigned long sirenClearDuration = 0;
+
+const unsigned long ManualCheckInterval = 10000; 
+unsigned long lastManualCheckTime = 0;
+
+// Power Variables 
+const unsigned long checkPowerInterval = 5000;
+unsigned long lastPowerCheckedTime = 0;
+const float Resistor1 = 10000.0;
+const float Resistor2 = 3300.0;
+const float powerRatio = (Resistor1 + Resistor2)/Resistor2;
+const float upperPowerThreshold = 11.5;
+const float lowerPowerThreshold = 10.8;
+String powerStatus = "Low";
+
+void pinConfig(){
+  pinMode(BACKUP_FLAME_DIGITAL, INPUT);
+  pinMode(MAIN_FLAME, INPUT_PULLUP);
+  pinMode(GAS_DIGITAL, INPUT);
+  pinMode(UPS_POWER_INDICATOR, INPUT);
+  pinMode(SIREN_1, OUTPUT);
+  pinMode(SIREN_2, OUTPUT);
+}
+
+void getDeviceMAC(){
+  WiFi.mode(WIFI_STA);
+  WiFi.begin();
+  delay(100);
+  deviceMAC = WiFi.macAddress();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+  if (deviceMAC == "00:00:00:00:00:00"){
+    Serial.println("ERROR: Cannot obtain device MAC Address.");
+  }
+  else {
+    Serial.println("Device Mac Address: " + deviceMAC);
+  }
+}
+
+void connectNetwork(){
+  WiFi.mode(WIFI_STA);
+  WiFiManager wm;
+  wm.resetSettings(); // Remove in production to remember WiFi
+  Serial.println("Connecting to WiFi...");
+  bool res = wm.autoConnect("CrowdSense_Main_Entry", "12345678");
+  if (!res) {
+    Serial.println("Failed to establish WiFi connection.");
+    firebaseConnected = false;
+  } else {
+    Serial.println("WiFi connected successfully.");
+    connectDB();
+  }
+}
+
+void connectDB(){
+  config.database_url = FIREBASE_HOST;
+  config.signer.tokens.legacy_token = FIREBASE_LEGACY_TOKEN;
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+  
+  if (Firebase.ready()) {
+    firebaseConnected = true;
+    Serial.println("Firebase connected successfully!");
+    Firebase.RTDB.setBool(&fbdo, (pathBase + "siren_alert_active").c_str(), false);
+    Firebase.RTDB.setBool(&fbdo, (pathBase + "siren_clear_active").c_str(), false);
+  } else {
+    firebaseConnected = false;
+  }
+
+  if (firebaseConnected) {
+    timeClient.begin();
+    timeClient.setTimeOffset(0); 
+    int ntpRetries = 0;
+    while (!timeClient.update() && ntpRetries < 5) {
+      timeClient.forceUpdate();
+      delay(500);
+      ntpRetries++;
+    }
+    unsigned long epochTime = timeClient.getEpochTime();
+    if (epochTime > 1000000) {
+      double currentEpochMillis = (double)epochTime * 1000.0;
+      Firebase.RTDB.setDouble(&fbdo, (pathBase + "last_updated").c_str(), currentEpochMillis);
+      lastHeartbeatTime = millis(); 
+    }
+  }
+}
+
+void checkPowerStatus(){
+  if (firebaseConnected && (millis() - lastPowerCheckedTime >= checkPowerInterval)){
+    lastPowerCheckedTime = millis();
+    int rawPinReading = analogRead(UPS_POWER_INDICATOR);
+    float pinVoltage = (rawPinReading / 4095.0)*3.3;
+    float upsVoltage = pinVoltage * powerRatio;
+    if (upsVoltage >= upperPowerThreshold) powerStatus = "High";
+    else if (upsVoltage < upperPowerThreshold && upsVoltage >= lowerPowerThreshold) powerStatus = "Adequate";
+    else powerStatus = "Low";
+  }
+}
+
+void calibrateBaseline() {
+  Serial.println("Calibrating background baseline. KEEP DOORWAY CLEAR...");
+  int samples = 10;
+  long sums[64] = {0};
+  int validCounts[64] = {0};
+
+  for(int i = 0; i < samples; i++) {
+    uint8_t dataReady = 0;
+    while(!dataReady) {
+      sensor.vl53l7cx_check_data_ready(&dataReady);
+      delay(5);
+    }
+    VL53L7CX_ResultsData results;
+    sensor.vl53l7cx_get_ranging_data(&results);
+    
+    for(int z = 0; z < 64; z++) {
+      int targetIndex = z * VL53L7CX_NB_TARGET_PER_ZONE;
+      if(results.target_status[targetIndex] == 5) {
+        sums[z] += results.distance_mm[targetIndex];
+        validCounts[z]++;
+      }
+    }
+  }
+
+  for(int z = 0; z < 64; z++) {
+    if(validCounts[z] > 0) {
+      baselineDistance[z] = sums[z] / validCounts[z];
+    } else {
+      baselineDistance[z] = 2500; 
+    }
+  }
+  Serial.println("Calibration complete. Static objects will now be ignored.");
+}
+
+void countCrowd(){
+  if (tofSuccess) {
+    VL53L7CX_ResultsData results;
+    uint8_t dataReady = 0;
+
+    sensor.vl53l7cx_check_data_ready(&dataReady);
+
+    if (dataReady) {
+      sensor.vl53l7cx_get_ranging_data(&results);
+
+      bool laneA[8] = {false, false, false, false, false, false, false, false}; 
+      bool laneB[8] = {false, false, false, false, false, false, false, false}; 
+
+      for (int y = 0; y < 8; y++) {
+        if (y != 2 && y != 5) continue; 
+
+        // Uses columns 1 through 6
+        for (int x = 1; x < 7; x++) { 
+          int zone = x + (y * 8); 
+          int targetIndex = zone * VL53L7CX_NB_TARGET_PER_ZONE;
+          int distance = results.distance_mm[targetIndex];
+          uint8_t status = results.target_status[targetIndex];
+
+          bool validStatus = (status == 5 || status == 6 || status == 9 || status == 10);
+
+          bool detected = (validStatus && 
+                           distance > MIN_DISTANCE_MM && 
+                           distance < PERSON_THRESHOLD_MM && 
+                           (baselineDistance[zone] - distance) > DROP_THRESHOLD_MM);
+
+          if (detected) {
+            if (zoneOccupancyCount[zone] < 255) zoneOccupancyCount[zone]++;
+          } else {
+            zoneOccupancyCount[zone] = 0;
+          }
+
+          bool confirmed = (zoneOccupancyCount[zone] >= MIN_FRAMES_OCCUPIED);
+
+          if (confirmed) {
+            if (y == 2) laneA[x] = true; 
+            if (y == 5) laneB[x] = true;      
+          }
+        }
+      }
+
+      unsigned long currentMillis = millis();
+      bool entryCompleted[8] = {false, false, false, false, false, false, false, false};
+      bool exitCompleted[8] = {false, false, false, false, false, false, false, false};
+
+      // Process columns 1 through 6
+      for (int x = 1; x < 7; x++) {
+        bool A = laneA[x];
+        bool B = laneB[x];
+
+        switch(laneState[x]) {
+          case 0: 
+            if (A && !B) laneState[x] = 1;
+            else if (!A && B) laneState[x] = 4;
+            break;
+          case 1: 
+            if (A && B) laneState[x] = 2;
+            else if (!A && B) laneState[x] = 3;
+            else if (!A && !B) laneState[x] = 0;
+            break;
+          case 2: 
+            if (!A && B) laneState[x] = 3;
+            else if (A && !B) laneState[x] = 1;
+            else if (!A && !B) laneState[x] = 0;
+            break;
+          case 3: 
+            if (!A && !B) {
+              if (currentMillis - lastEntryTime[x] > EVENT_COOLDOWN_MS) {
+                bool adjacentRecent = false;
+                if (x > 1 && (currentMillis - lastEntryTime[x - 1] < CLUSTER_MERGE_MS)) adjacentRecent = true;
+                if (x < 6 && (currentMillis - lastEntryTime[x + 1] < CLUSTER_MERGE_MS)) adjacentRecent = true;
+                
+                if (!adjacentRecent) entryCompleted[x] = true;
+                lastEntryTime[x] = currentMillis;
+              }
+              laneState[x] = 0;
+            }
+            else if (A && B) laneState[x] = 2;
+            else if (A && !B) laneState[x] = 1;
+            break;
+          case 4: 
+            if (A && B) laneState[x] = 5;
+            else if (A && !B) laneState[x] = 6;
+            else if (!A && !B) laneState[x] = 0;
+            break;
+          case 5: 
+            if (A && !B) laneState[x] = 6;
+            else if (!A && B) laneState[x] = 4;
+            else if (!A && !B) laneState[x] = 0;
+            break;
+          case 6: 
+            if (!A && !B) {
+              if (currentMillis - lastExitTime[x] > EVENT_COOLDOWN_MS) {
+                bool adjacentRecent = false;
+                if (x > 1 && (currentMillis - lastExitTime[x - 1] < CLUSTER_MERGE_MS)) adjacentRecent = true;
+                if (x < 6 && (currentMillis - lastExitTime[x + 1] < CLUSTER_MERGE_MS)) adjacentRecent = true;
+                
+                if (!adjacentRecent) exitCompleted[x] = true;
+                lastExitTime[x] = currentMillis;
+              }
+              laneState[x] = 0;
+            }
+            else if (A && B) laneState[x] = 5;
+            else if (!A && B) laneState[x] = 4;
+            break;
+        }
+      }
+
+      int entryCount = 0;
+      for (int x = 1; x < 7; x++) if (entryCompleted[x]) entryCount++;
+
+      int exitCount = 0;
+      for (int x = 1; x < 7; x++) if (exitCompleted[x]) exitCount++;
+
+      if (entryCount > 0) {
+        totalInside += entryCount;
+        if (Firebase.ready()) Firebase.RTDB.setIntAsync(&fbdo, (pathBase + "people_inside").c_str(), totalInside);
+        Serial.print("ENTRY x"); Serial.println(entryCount);
+      }
+
+      if (exitCount > 0) {
+        totalExits += exitCount;
+        totalInside -= exitCount;
+        if (Firebase.ready()) {
+          FirebaseJson json;
+          json.set("people_inside", totalInside);
+          json.set("total_exits", totalExits);
+          Firebase.RTDB.updateNodeAsync(&fbdo, pathBase.c_str(), &json);
+        }
+        Serial.print("EXIT x"); Serial.println(exitCount);
+      }
+
+      if (totalInside < 0) totalInside = 0;
+    }
+  }
+}
+
+void sendHeartbeat() {
+  if (firebaseConnected && Firebase.ready() && (millis() - lastHeartbeatTime >= HEARTBEAT_INTERVAL)) {
+    lastHeartbeatTime = millis();
+    timeClient.update();
+    unsigned long epochTime = timeClient.getEpochTime();
+    
+    if (epochTime > 1000000) {
+      double currentEpochMillis = (double)epochTime * 1000.0;
+      
+      FirebaseJson json;
+      json.set("last_updated", currentEpochMillis);
+      json.set("power_status", powerStatus);
+      
+      Firebase.RTDB.updateNodeAsync(&fbdo, pathBase.c_str(), &json);
+    }
+  }
+}
+
+void checkAppCommands() {
+  if (firebaseConnected && Firebase.ready() && (millis() - lastManualCheckTime >= ManualCheckInterval)) {
+    lastManualCheckTime = millis();
+
+    // Evacuation Siren
+    if (Firebase.RTDB.getBool(&fbdo, (pathBase + "siren_alert_active").c_str())) {
+      bool appCommand = fbdo.boolData();
+      if (appCommand && !sirenAlertActive) {
+        sirenAlertActive = true;
+        digitalWrite(SIREN_2, LOW);
+        sirenAlertDuration = millis() + 180000;
+        Serial.println("APP COMMAND: Evacuation Siren ACTIVATED.");
+      } else if (!appCommand && sirenAlertActive) {
+        sirenAlertActive = false;
+        digitalWrite(SIREN_2, HIGH);
+        Serial.println("APP COMMAND: Evacuation Siren DEACTIVATED.");
+      }
+    }
+
+    // Safety Alert
+    if (Firebase.RTDB.getBool(&fbdo, (pathBase + "siren_clear_active").c_str())) {
+      bool appCommand = fbdo.boolData();
+      if (appCommand && !sirenClearActive) {
+        sirenClearActive = true;
+        digitalWrite(SIREN_1, LOW);
+        sirenClearDuration = millis() + 180000;
+        Serial.println("APP COMMAND: Safety Alert ACTIVATED.");
+      } else if (!appCommand && sirenClearActive) {
+        sirenClearActive = false;
+        digitalWrite(SIREN_1, HIGH);
+        Serial.println("APP COMMAND: Safety Alert DEACTIVATED.");
+      }
+    }
+
+    // --- Reset ToF Counts (reset_counts) ---
+    if (Firebase.RTDB.getBool(&fbdo, (pathBase + "reset_counts").c_str())) {
+      if (fbdo.boolData() == true) {
+        Serial.println("APP COMMAND: Resetting all ToF counts to 0.");
+        totalInside = 0;
+        totalExits = 0;
+        
+        // ASYNC FIX: Send the reset values and acknowledge the app command without blocking the network
+        FirebaseJson json;
+        json.set("people_inside", 0);
+        json.set("total_exits", 0);
+        json.set("reset_counts", false);
+        Firebase.RTDB.updateNodeAsync(&fbdo, pathBase.c_str(), &json);
+      }
+    }
+
+    // Synchronize App Resets
+    if (Firebase.RTDB.getInt(&fbdo, (pathBase + "total_exits").c_str())) {
+      int cloudExits = fbdo.intData();
+      if (cloudExits != totalExits) totalExits = cloudExits;
+    }
+  }
+}
+
+void handleSirenTimeouts() {
+  if (sirenAlertActive && millis() > sirenAlertDuration) {
+    sirenAlertActive = false;
+    digitalWrite(SIREN_2, HIGH);
+    Serial.println("TIMEOUT: Evacuation Siren DEACTIVATED.");
+    if (Firebase.ready()) Firebase.RTDB.setBoolAsync(&fbdo, (pathBase + "siren_alert_active").c_str(), false);
+  }
+
+  if (sirenClearActive && millis() > sirenClearDuration) {
+    sirenClearActive = false;
+    digitalWrite(SIREN_1, HIGH);
+    Serial.println("TIMEOUT: Safety Alert DEACTIVATED.");
+    if (Firebase.ready()) Firebase.RTDB.setBoolAsync(&fbdo, (pathBase + "siren_clear_active").c_str(), false);
+  }
+}
+
+void uploadData(){
+  if (firebaseConnected && Firebase.ready() && (millis() - lastFirebaseSendTime >= FIREBASE_SEND_INTERVAL)) {
+    lastFirebaseSendTime = millis();
+    timeClient.update();
+    unsigned long epochTime = timeClient.getEpochTime();
+
+    if (epochTime > 1000000) {
+      double currentEpochMillis = (double)epochTime * 1000.0;
+      
+      FirebaseJson json;
+      json.set("people_inside", totalInside);
+      json.set("total_exits", totalExits);
+      json.set("siren_alert_active", sirenAlertActive);
+      json.set("siren_clear_active", sirenClearActive);
+      json.set("power_status", powerStatus);
+      json.set("last_updated", currentEpochMillis);
+      
+      Firebase.RTDB.updateNodeAsync(&fbdo, pathBase.c_str(), &json);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000); 
+  Serial.println("\n--- System Booting ---");
+
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.setClock(400000); 
+  pinConfig();
+  
+  digitalWrite(SIREN_1, HIGH);
+  digitalWrite(SIREN_2, HIGH);
+
+  sensor.begin(); 
+  if (sensor.init_sensor() != 0) {
+    Serial.println("CRITICAL: VL53L7CX sensor not found!");
+    tofSuccess = false;
+  } else {
+    sensor.vl53l7cx_set_resolution(VL53L7CX_RESOLUTION_8X8);
+    sensor.vl53l7cx_set_ranging_frequency_hz(15);
+    sensor.vl53l7cx_start_ranging();
+    tofSuccess = true;
+    Serial.println("VL53L7CX Initialized at 8x8 15Hz.");
+    
+    // Perform dynamic calibration to map out the room
+    calibrateBaseline();
+  }
+  
+  getDeviceMAC();
+  pathBase = "/sensor_data/" + deviceMAC + "/";
+  checkPowerStatus();
+  
+  // Connect WiFi and Firebase
+  WiFi.mode(WIFI_STA);
+  WiFiManager wm;
+  wm.resetSettings(); // Remove in production to remember WiFi
+  Serial.println("Connecting to WiFi...");
+  if (wm.autoConnect("CrowdSense_Main_Entry", "12345678")) {
+    Serial.println("WiFi connected successfully.");
+    connectDB();
+  } else {
+    Serial.println("Failed to establish WiFi connection.");
+    firebaseConnected = false;
+  }
+
+  // --- RECOVERY SNIPPET ---
+  if (firebaseConnected && Firebase.ready()) {
+    Serial.println("Recovering previous counts from Firebase...");
+    if (Firebase.RTDB.getInt(&fbdo, (pathBase + "people_inside").c_str())) {
+      totalInside = fbdo.intData();
+    }
+    if (Firebase.RTDB.getInt(&fbdo, (pathBase + "total_exits").c_str())) {
+      totalExits = fbdo.intData();
+    }
+    Serial.print("Recovered State -> Inside: "); Serial.print(totalInside);
+    Serial.print(" | Exits: "); Serial.println(totalExits);
+  }
+
+  Serial.println("--- Setup Complete ---");
+}
+
+void loop() {
+  // 1. Check if WiFi dropped
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi lost! Attempting reconnect...");
+    WiFi.reconnect();
+    
+    unsigned long reconnectStart = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - reconnectStart < 10000) {
+      delay(500);
+      Serial.print(".");
+    }
+    
+    // 2. If it reconnected, FORCE Firebase to wake up
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nWiFi reconnected.");
+      Firebase.reconnectWiFi(true);
+      timeClient.begin();
+      timeClient.forceUpdate(); 
+    } else {
+      Serial.println("\nWiFi reconnect failed. Skipping loop.");
+      return; 
+    }
+  }
+
+  checkPowerStatus();
+  countCrowd();
+  checkAppCommands();
+  handleSirenTimeouts();
+  sendHeartbeat();
+  uploadData();
+}

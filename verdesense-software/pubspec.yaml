@@ -1,0 +1,59 @@
+name: crowd_sense
+description: Intelligent Crowd Monitoring and Emergency Alert System for PUP CEA Building.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: any
+  fl_chart: 0.69.0
+  font_awesome_flutter: any
+  animate_do: any
+  glassmorphism: any
+  provider: any
+  window_manager: any
+  intl: any
+  firebase_core: any
+  firebase_database: any
+  firebase_auth: any
+  cloud_firestore: any
+  http: any
+  mailer: any
+  flutter_dotenv: any
+  cloud_functions: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+  flutter_launcher_icons: any
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/crowdsense_logo_blue.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/images/crowdsense_logo_blue.png"
+    background_color: "#0F172A"
+    theme_color: "#3B82F6"
+  windows:
+    generate: true
+    image_path: "assets/images/crowdsense_logo_blue.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/images/crowdsense_logo_blue.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - .env
+
