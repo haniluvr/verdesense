@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_notification_modal.dart';
 
@@ -361,8 +362,14 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
 
     if (_isProcessing) return;
 
-    final String mac = _macController.text.trim().toUpperCase();
+    String mac = _macController.text.trim().toUpperCase();
     final String name = _nameController.text.trim();
+
+    // Sanitize and auto-format
+    mac = mac.replaceAll('-', ':').replaceAll(' ', '');
+    if (mac.length == 12 && !mac.contains(':')) {
+      mac = '${mac.substring(0, 2)}:${mac.substring(2, 4)}:${mac.substring(4, 6)}:${mac.substring(6, 8)}:${mac.substring(8, 10)}:${mac.substring(10, 12)}';
+    }
 
     // Strict MAC Address Validation (XX:XX:XX:XX:XX:XX)
     final macRegex = RegExp(r'^([0-9A-F]{2}[:]){5}([0-9A-F]{2})$');
@@ -379,13 +386,19 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
     setState(() => _isProcessing = true);
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      debugPrint("--- ADD DEVICE DEBUG ---");
+      debugPrint("Current User UID: ${user?.uid}");
+      debugPrint("DB URL: ${FirebaseDatabase.instance.app.options.databaseURL}");
+      debugPrint("------------------------");
+
       await _addDeviceToFirebase(mac, name);
 
       _macController.clear();
       _nameController.clear();
-      FocusScope.of(context).unfocus();
       
       if (mounted) {
+        FocusScope.of(context).unfocus();
         CustomNotificationModal.show(
           context: context,
           title: "Device Added",
@@ -699,7 +712,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
             controller: _macController,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             inputFormatters: [
-              LengthLimitingTextInputFormatter(17),
+              LengthLimitingTextInputFormatter(30),
             ],
             decoration: InputDecoration(
               labelText: "MAC ADDRESS",
@@ -878,7 +891,6 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
   late TextEditingController _macCtrl;
   late TextEditingController _nameCtrl;
   Timer? _heartbeatTimer;
-   late double _tempThresh;
    late double _smokeThresh;
    late double _flameThresh;
    late bool _includeInHeadcount;
@@ -890,7 +902,6 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
     _macCtrl = TextEditingController(text: widget.device["macAddress"]);
     _nameCtrl = TextEditingController(text: widget.device["name"]);
     final sensors = widget.device["sensors"] as Map<String, dynamic>;
-    _tempThresh = (sensors["temp_threshold"] ?? 35.0).toDouble();
     _smokeThresh = (sensors["smoke_threshold"] ?? 300.0).toDouble().clamp(0.0, 2000.0);
     _flameThresh = (sensors["flame_threshold"] ?? 200.0).toDouble().clamp(0.0, 4095.0);
     _includeInHeadcount = (sensors["include_in_headcount"] ?? true) as bool;
@@ -913,7 +924,6 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
         oldSensors["include_in_headcount"] != newSensors["include_in_headcount"] ||
         oldSensors["sync_count"] != newSensors["sync_count"]) {
       setState(() {
-        _tempThresh = (newSensors["temp_threshold"] ?? 35.0).toDouble();
         _smokeThresh = (newSensors["smoke_threshold"] ?? 300.0).toDouble().clamp(0.0, 2000.0);
         _flameThresh = (newSensors["flame_threshold"] ?? 200.0).toDouble().clamp(0.0, 4095.0);
         _includeInHeadcount = (newSensors["include_in_headcount"] ?? true) as bool;

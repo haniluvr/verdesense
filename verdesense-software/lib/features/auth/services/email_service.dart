@@ -1,4 +1,4 @@
-import 'package:mailer/mailer.dart';
+﻿import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:flutter/foundation.dart';
 
@@ -83,7 +83,7 @@ class EmailService {
             </div>
         </div>
         <div class="footer">
-            This is an automated message from the CrowdSense App. Please do not reply.<br>
+            This is an automated message from the VerdeSense App. Please do not reply.<br>
             <span style="opacity: 0.3; font-size: 10px;">Ref: ${DateTime.now().millisecondsSinceEpoch}</span>
         </div>
     </div>
@@ -92,9 +92,9 @@ class EmailService {
     ''';
 
     final message = Message()
-      ..from = Address(senderEmail, 'CrowdSense App')
+      ..from = Address(senderEmail, 'VerdeSense App')
       ..recipients.add(targetEmail)
-      ..subject = 'Welcome to CrowdSense - Your Account Details'
+      ..subject = 'Welcome to VerdeSense - Your Account Details'
       ..html = htmlTemplate;
 
     try {
@@ -106,3 +106,4 @@ class EmailService {
     }
   }
 }
+

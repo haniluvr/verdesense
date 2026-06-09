@@ -6,6 +6,7 @@ import 'features/auth/screens/force_password_change_screen.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
 
 import 'features/splash/screens/splash_screen.dart';
+import 'features/onboarding/screens/onboarding_screen.dart';
 import 'core/widgets/siren_active_dialog.dart';
 
 import 'dart:io';
@@ -29,9 +30,9 @@ void main() async {
   try {
     await dotenv.load(fileName: ".env");
     debugPrint(
-        '[CrowdSense] .env loaded successfully. DB URL: ${dotenv.env['FIREBASE_DATABASE_URL']}');
+        '[VerdeSense] .env loaded successfully. DB URL: ${dotenv.env['FIREBASE_DATABASE_URL']}');
   } catch (e) {
-    debugPrint('[CrowdSense] WARNING: Failed to load .env file: $e');
+    debugPrint('[VerdeSense] WARNING: Failed to load .env file: $e');
   }
 
   try {
@@ -48,7 +49,7 @@ void main() async {
   // Explicitly set the RTDB URL to the correct asia-southeast1 region
   // This prevents the "Database lives in a different region" error on Android
   final dbUrl = dotenv.env['FIREBASE_DATABASE_URL'] ??
-      'https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app';
+      'https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app';
   // Go offline BEFORE setting the URL to prevent the C++ RTDB SDK assertion
   // (connection_state_ == kDisconnected). The SDK auto-connects after
   // initializeApp, so setting databaseURL while connected can trigger abort().
@@ -60,7 +61,7 @@ void main() async {
     FirebaseDatabase.instance.goOffline();
   }
   FirebaseDatabase.instance.databaseURL = dbUrl;
-  debugPrint('[CrowdSense] Firebase RTDB URL set to: $dbUrl');
+  debugPrint('[VerdeSense] Firebase RTDB URL set to: $dbUrl');
 
   // Catch the firebase_auth Windows threading bug at the zone level
   // so it doesn't hard-crash the "Lost connection to device"
@@ -80,7 +81,7 @@ void main() async {
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      title: 'CrowdSense App',
+      title: 'VerdeSense App',
       titleBarStyle: TitleBarStyle.normal,
     );
 
@@ -98,13 +99,13 @@ void main() async {
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => SirenProvider()),
       ],
-      child: const CrowdSenseApp(),
+      child: const VerdeSenseApp(),
     ),
   );
 }
 
-class CrowdSenseApp extends StatelessWidget {
-  const CrowdSenseApp({super.key});
+class VerdeSenseApp extends StatelessWidget {
+  const VerdeSenseApp({super.key});
 
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -117,7 +118,7 @@ class CrowdSenseApp extends StatelessWidget {
           builder: (context, sirenProvider, child) {
             return MaterialApp(
               navigatorKey: navigatorKey,
-              title: 'CrowdSense App',
+              title: 'VerdeSense App',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
@@ -160,6 +161,7 @@ class CrowdSenseApp extends StatelessWidget {
               initialRoute: '/splash',
               routes: {
                 '/splash': (context) => const SplashScreen(),
+                '/onboarding': (context) => const OnboardingScreen(),
                 '/login': (context) => const LoginScreen(),
                 '/force-password-change': (context) {
                   final args = ModalRoute.of(context)!.settings.arguments
@@ -204,7 +206,7 @@ class _GlobalSirenBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: isDark
-              ? const Color(0xFF1E2433).withValues(alpha: 0.95)
+              ? const Color(0xFF2A161A).withValues(alpha: 0.95)
               : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
@@ -249,3 +251,4 @@ class _GlobalSirenBar extends StatelessWidget {
     );
   }
 }
+

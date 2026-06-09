@@ -1,6 +1,6 @@
-{
-    "name": "crowd_sense",
-    "short_name": "crowd_sense",
+﻿{
+    "name": "verde_sense",
+    "short_name": "verde_sense",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0F172A",

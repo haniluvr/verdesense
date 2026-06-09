@@ -15,6 +15,14 @@ class SirenProvider with ChangeNotifier {
   bool _isBottomNavVisible = false;
   bool get isBottomNavVisible => _isBottomNavVisible;
 
+  bool _isSirenArmed = true;
+  bool get isSirenArmed => _isSirenArmed;
+
+  void setSirenArmed(bool value) {
+    _isSirenArmed = value;
+    notifyListeners();
+  }
+
   /// Cached list of device MAC keys (populated by the dashboard)
   List<String> _deviceKeys = [];
 

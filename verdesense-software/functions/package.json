@@ -1,6 +1,6 @@
-{
-  "name": "crowdsense-functions",
-  "description": "Cloud Functions for CrowdSense",
+﻿{
+  "name": "VerdeSense-functions",
+  "description": "Cloud Functions for VerdeSense",
   "dependencies": {
     "firebase-admin": "^11.8.0",
     "firebase-functions": "^4.3.1"
@@ -13,3 +13,4 @@
   },
   "main": "index.js"
 }
+

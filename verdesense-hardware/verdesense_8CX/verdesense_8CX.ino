@@ -22,8 +22,12 @@
 #define GAS_DIGITAL 33
 #define BACKUP_FLAME_ANALOG 34
 #define GAS 35
-#define FIREBASE_HOST "https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app/"
-#define FIREBASE_LEGACY_TOKEN "5mGeiwSA9PLndbFmJZtC8x7a9U78VaM0H21nh1nd"
+#define FIREBASE_HOST "https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app/"
+// Web API key (from Firebase Console → Project Settings → General)
+#define FIREBASE_API_KEY "AIzaSyAtxJApHXwlOyrcmnqA1P8TWbzWxtt7TLY"
+// Dedicated Firebase Auth user created for this hardware device
+#define DEVICE_EMAIL "hardware@verdesense.com"
+#define DEVICE_PASSWORD "temp1234"
 
 // Initializations
 VL53L8CX sensor(&Wire, -1);

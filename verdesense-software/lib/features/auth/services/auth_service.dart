@@ -3,12 +3,14 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'email_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   // Firebase Realtime DB REST API Base URL
-  final String _dbBaseUrl = 'https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app';
+  final String _dbBaseUrl = 'https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app';
 
   /// Logs a user in using either their Email or their Username.
   /// Returns a Map payload containing the raw Firebase `User` object and the `userData` mapping.
@@ -40,7 +42,9 @@ class AuthService {
       // when it tries to reconnect after an auth change. If the persistent
       // connection is still active, the assertion fails and abort() is called,
       // crashing the Windows app. Going offline first ensures a clean state.
-      FirebaseDatabase.instance.goOffline();
+      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+        FirebaseDatabase.instance.goOffline();
+      }
 
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: loginEmail,
@@ -81,7 +85,7 @@ class AuthService {
       if (authEmail != null && dbUsername != null) {
         // 1. Sync Email if mismatched
         if (authEmail != rawUserData['email']) {
-          print('[AuthService] Email mismatch detected! Syncing...');
+          debugPrint('[AuthService] Email mismatch detected! Syncing...');
           final idToken = await userCredential.user!.getIdToken(true);
           final syncUrl = Uri.parse('$_dbBaseUrl/users/$uid.json?auth=$idToken');
           await http.patch(syncUrl, body: json.encode({'email': authEmail}));
@@ -93,13 +97,13 @@ class AuthService {
           final mappingUrl = Uri.parse('$_dbBaseUrl/usernames/$dbUsername.json');
           final mappingCheck = await http.get(mappingUrl);
           if (mappingCheck.body == 'null') {
-            print('[AuthService] Username mapping missing. Activating...');
+            debugPrint('[AuthService] Username mapping missing. Activating...');
             final idToken = await userCredential.user!.getIdToken(true);
             final syncMappingUrl = Uri.parse('$_dbBaseUrl/usernames/$dbUsername.json?auth=$idToken');
             await http.put(syncMappingUrl, body: json.encode(authEmail));
           }
         } catch (e) {
-          print('[AuthService] Username mapping sync failed: $e');
+          debugPrint('[AuthService] Username mapping sync failed: $e');
         }
       }
 
@@ -245,7 +249,7 @@ class AuthService {
     // 3. Attempt the Cloud Function (Hard Delete - Auth account wipe)
     // This will gracefully fail with a log if the user hasn't upgraded to Blaze yet.
     try {
-      final cloudUrl = Uri.parse('https://us-central1-crowdsense-db.cloudfunctions.net/deleteUserAccount');
+      final cloudUrl = Uri.parse('https://us-central1-VerdeSense-db.cloudfunctions.net/deleteUserAccount');
       await http.post(
         cloudUrl,
         headers: {
@@ -255,8 +259,9 @@ class AuthService {
         body: json.encode({'data': {'targetUid': targetUid}}),
       ).timeout(const Duration(seconds: 8));
     } catch (e) {
-      print('Cloud Function trigger skipped/failed (Blaze Plan required): $e');
+      debugPrint('Cloud Function trigger skipped/failed (Blaze Plan required): $e');
     }
   }
 }
+
 

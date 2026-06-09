@@ -193,7 +193,7 @@ class PeopleCounterCard extends StatelessWidget {
                                     children: [
                                       _buildMetricCard("Entries", pageEntries, AppColors.statusSafe, isDark),
                                       const SizedBox(width: 12),
-                                      _buildMetricCard("Exits", data['exits'] ?? 0, AppColors.statusDanger, isDark),
+                                      _buildMetricCard("Exits", pageExits, AppColors.statusDanger, isDark),
                                     ],
                                   ),
                                 ),

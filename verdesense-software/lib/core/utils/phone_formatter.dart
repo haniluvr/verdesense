@@ -50,7 +50,7 @@ class PhilippinePhoneFormatter extends TextInputFormatter {
     // If we just added a character and it's a digit at a boundary, we might need to skip the space
     if (newValue.text.length > oldValue.text.length) {
        // Check if we just added a digit at index 3 or 6 relative to digitsOnly
-       int digitIndex = cursorPosition - prefix.length;
+       // int digitIndex = cursorPosition - prefix.length; // removed unused variable
        // If the digit we just added is followed by a space in the final string, 
        // and we were at that position, we should be past the space.
        // E.g. +63 921| type 5 -> +63 921 5|

@@ -19,5 +19,5 @@ void main() {
       }
     }
   }
-  print('Successfully updated $replaceCount instances of withOpacity across $updatedFiles files.');
+  stdout.writeln('Successfully updated $replaceCount instances of withOpacity across $updatedFiles files.');
 }

@@ -12,19 +12,19 @@ class GeometricBackground extends StatelessWidget {
 
     return Stack(
       children: [
-        // Base Gradient
+        // Base Gradient — dark maroon to slightly lighter maroon
         Container(
           decoration: BoxDecoration(
             gradient: isDark ? AppColors.darkGradient : AppColors.lightGradient,
           ),
         ),
-        
-        // Geometric Shapes
+
+        // Subtle geometric shapes in the maroon palette
         CustomPaint(
           painter: _GeometricPainter(isDark: isDark),
           size: Size.infinite,
         ),
-        
+
         // Content
         child,
       ],
@@ -39,22 +39,20 @@ class _GeometricPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.fill;
+    final paint = Paint()..style = PaintingStyle.fill;
 
-    // 1. Large Diagonal Blue Slice (Top Right)
+    // 1. Diagonal rose tint — top right
     final path1 = Path();
-    path1.moveTo(size.width * 0.4, 0); // Start 40% across top
-    path1.lineTo(size.width, 0);       // Top right corner
-    path1.lineTo(size.width, size.height * 0.4); // Down right side
-    path1.lineTo(0, size.height * 0.15); // Back to left side but lower
+    path1.moveTo(size.width * 0.45, 0);
+    path1.lineTo(size.width, 0);
+    path1.lineTo(size.width, size.height * 0.35);
+    path1.lineTo(0, size.height * 0.12);
     path1.close();
 
-    // Use a gradient for the shape
     paint.shader = LinearGradient(
       colors: [
-        AppColors.primaryBlue.withValues(alpha: isDark ? 0.15 : 0.15),
-        AppColors.accentBlue.withValues(alpha: isDark ? 0.05 : 0.08),
+        AppColors.primaryRose.withValues(alpha: isDark ? 0.12 : 0.10),
+        AppColors.accentRose.withValues(alpha: isDark ? 0.04 : 0.06),
       ],
       begin: Alignment.topRight,
       end: Alignment.bottomLeft,
@@ -62,16 +60,16 @@ class _GeometricPainter extends CustomPainter {
 
     canvas.drawPath(path1, paint);
 
-    // 2. Secondary Shape (Bottom Left)
+    // 2. Bottom-left accent shape
     final path2 = Path();
-    path2.moveTo(0, size.height * 0.7);
-    path2.lineTo(size.width * 0.4, size.height);
+    path2.moveTo(0, size.height * 0.72);
+    path2.lineTo(size.width * 0.38, size.height);
     path2.lineTo(0, size.height);
     path2.close();
 
     paint.shader = LinearGradient(
       colors: [
-        AppColors.accentCyan.withValues(alpha: isDark ? 0.1 : 0.12),
+        AppColors.borderDark.withValues(alpha: isDark ? 0.35 : 0.20),
         Colors.transparent,
       ],
       begin: Alignment.bottomLeft,
@@ -80,25 +78,40 @@ class _GeometricPainter extends CustomPainter {
 
     canvas.drawPath(path2, paint);
 
-    // 3. Floating Orbs/circles for "Alive" feel
+    // 3. Soft ambient orbs for depth
     final circlePaint = Paint()
       ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
 
-    circlePaint.color = AppColors.primaryBlue.withValues(alpha: isDark ? 0.1 : 0.12);
-    canvas.drawCircle(Offset(size.width * 0.8, size.height * 0.2), 60, circlePaint);
+    // Top-right warm rose orb
+    circlePaint.color = AppColors.primaryRose.withValues(alpha: isDark ? 0.10 : 0.08);
+    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.18), 70, circlePaint);
 
-    circlePaint.color = isDark 
-        ? AppColors.statusDanger.withValues(alpha: 0.05) 
-        : AppColors.statusWarning.withValues(alpha: 0.08); // Warm glow in light mode
-    canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.8), 80, circlePaint);
+    // Bottom-left deep maroon orb
+    circlePaint.color = AppColors.borderDark.withValues(alpha: isDark ? 0.25 : 0.15);
+    canvas.drawCircle(Offset(size.width * 0.15, size.height * 0.82), 90, circlePaint);
+
+    // 4. Subtle grid / road-map lines to echo the map aesthetic from the design
+    final linePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5
+      ..color = AppColors.primaryRose.withValues(alpha: isDark ? 0.06 : 0.04);
+
+    // Horizontal lines
+    for (int i = 1; i < 8; i++) {
+      final y = size.height * i / 8;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    }
+    // Vertical lines
+    for (int i = 1; i < 6; i++) {
+      final x = size.width * i / 6;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+    }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    if (oldDelegate is _GeometricPainter) {
-      return oldDelegate.isDark != isDark;
-    }
+    if (oldDelegate is _GeometricPainter) return oldDelegate.isDark != isDark;
     return true;
   }
 }

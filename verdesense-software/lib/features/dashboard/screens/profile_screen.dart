@@ -6,7 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/user_provider.dart';
 import '../../../../core/widgets/secondary_geometric_background.dart';
@@ -14,7 +14,6 @@ import '../../../../core/widgets/custom_notification_modal.dart';
 import '../../../../core/utils/phone_formatter.dart';
 import '../../auth/widgets/update_email_dialog.dart';
 import '../../auth/widgets/update_password_dialog.dart';
-
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -71,7 +70,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'Changed password',
   ];
   final Map<String, int> _deviceHealth = {'Online': 6, 'Critical': 1, 'Offline': 0};
-
 
   bool _isEditing = false;
   bool _hasChanges = false;
@@ -223,7 +221,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (uid != null) {
       try {
         final idToken = await userProv.authUser!.getIdToken();
-        final dbBaseUrl = 'https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app';
+        final dbBaseUrl = 'https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app';
         final updateUrl = Uri.parse('$dbBaseUrl/users/$uid.json?auth=$idToken');
         
         final finalPhone = _phoneCtrl.text.trim().isEmpty ? 'N/A' : _phoneCtrl.text.trim();
@@ -264,7 +262,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _hasChanges = false;
         });
         
-        _showSuccess('Profile updated. Your changes are now synced across the CrowdSense network.');
+        _showSuccess('Profile updated. Your changes are now synced across the VerdeSense network.');
       } catch (e) {
         setState(() => _isEditing = true);
         _showError('Failed to sync changes with server: $e');
@@ -309,7 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Text('Log Out All Sessions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         ]),
         content: const Text(
-          'This will immediately end all other active sessions across the CrowdSense network. Your current device session will remain active.',
+          'This will immediately end all other active sessions across the VerdeSense network. Your current device session will remain active.',
           style: TextStyle(height: 1.5),
         ),
         actions: [
@@ -355,20 +353,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
+          toolbarHeight: 76,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_rounded),
-            onPressed: () => Navigator.pop(context),
+          leading: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_rounded),
+              onPressed: () => Navigator.pop(context),
+            ),
           ),
-          title: Text(
-          _isEditing ? 'Edit Profile Details' : 'Profile Details',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
+          title: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              _isEditing ? 'Edit Profile Details' : 'Profile Details',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 28),
+            ),
+          ),
         actions: [],
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20),
         children: [
 
           // ─── AVATAR HEADER ────────────────────────────────────────────────
@@ -538,11 +543,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // ── Change Email Address ──────────────────────────────────────
             InkWell(
               onTap: () async {
+                final userProv = context.read<UserProvider>();
                 await UpdateEmailDialog.show(context);
                 // The dialog handles all syncing internally.
                 // Just refresh the displayed email from the provider.
                 if (mounted) {
-                  final newEmail = context.read<UserProvider>().email;
+                  final newEmail = userProv.email;
                   if (newEmail.isNotEmpty && newEmail != _emailCtrl.text) {
                     setState(() {
                       _origEmail = newEmail;
@@ -954,5 +960,6 @@ class _StatChip extends StatelessWidget {
     );
   }
 }
+
 
 

@@ -1,4 +1,4 @@
-// Libraries
+﻿// Libraries
 #include <Wire.h>
 #include <vl53l7cx_class.h>
 #include <OneWire.h>
@@ -22,7 +22,7 @@
 #define GAS_DIGITAL 33
 #define BACKUP_FLAME_ANALOG 34
 #define GAS 35
-#define FIREBASE_HOST "https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define FIREBASE_HOST "https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app"
 #define FIREBASE_LEGACY_TOKEN "5mGeiwSA9PLndbFmJZtC8x7a9U78VaM0H21nh1nd"
 
 // Initializations
@@ -118,7 +118,7 @@ void connectNetwork(){
   WiFiManager wm;
   wm.resetSettings(); // Remove in production to remember WiFi
   Serial.println("Connecting to WiFi...");
-  bool res = wm.autoConnect("CrowdSense_Main_Entry", "12345678");
+  bool res = wm.autoConnect("VerdeSense_Main_Entry", "12345678");
   if (!res) {
     Serial.println("Failed to establish WiFi connection.");
     firebaseConnected = false;
@@ -498,7 +498,7 @@ void setup() {
   WiFiManager wm;
   wm.resetSettings(); // Remove in production to remember WiFi
   Serial.println("Connecting to WiFi...");
-  if (wm.autoConnect("CrowdSense_Main_Entry", "12345678")) {
+  if (wm.autoConnect("VerdeSense_Main_Entry", "12345678")) {
     Serial.println("WiFi connected successfully.");
     connectDB();
   } else {

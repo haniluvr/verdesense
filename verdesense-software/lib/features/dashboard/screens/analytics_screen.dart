@@ -6,7 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/page_title.dart';
+import '../../../../core/widgets/secondary_geometric_background.dart';
 import '../../../../core/providers/settings_provider.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -171,19 +171,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final settings = context.watch<SettingsProvider>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PageTitle(
-          key: ValueKey('Page_${widget.activeIndex}'),
-          title: "Analytics"
-        ),
-        const SizedBox(height: 24),
-        
         // --- SECTION 1: Emergency Sensor Trends ---
         _buildSectionTitle(context, "EMERGENCY SENSOR TRENDS"),
         const SizedBox(height: 24),
@@ -530,90 +522,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildMetricCard({
-    required BuildContext context,
-    required String title,
-    required String value,
-    required String unit,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-             padding: const EdgeInsets.all(12),
-             decoration: BoxDecoration(
-               color: color.withValues(alpha: 0.2),
-               shape: BoxShape.circle,
-             ),
-             child: Icon(icon, color: color, size: 32),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                   title,
-                   style: TextStyle(
-                     fontSize: 16,
-                     fontWeight: FontWeight.w600,
-                     color: colorScheme.onSurface,
-                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      unit,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
 
   // --- MOCK DATA CHARTS ---
 
@@ -648,7 +556,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   interval: 6,
                   getTitlesWidget: (value, meta) {
                     return SideTitleWidget(
-                      meta: meta,
+                      axisSide: meta.axisSide,
                       child: Text('${value.toInt()}h', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     );
                   },
@@ -661,7 +569,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   reservedSize: 40,
                   getTitlesWidget: (value, meta) {
                     return SideTitleWidget(
-                      meta: meta,
+                      axisSide: meta.axisSide,
                       child: Text('${value.toInt()}°C', style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     );
                   },

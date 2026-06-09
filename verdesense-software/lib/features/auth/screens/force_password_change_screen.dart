@@ -1,4 +1,4 @@
-import 'package:animate_do/animate_do.dart';
+﻿import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -68,7 +68,7 @@ class _ForcePasswordChangeScreenState extends State<ForcePasswordChangeScreen> {
       final idToken = await user.getIdToken();
       
       // 1. Remove the 'requiresPasswordChange' flag from RTDB to allow dashboard entry (VIA REST API)
-      final dbUrl = Uri.parse('https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app/users/${user.uid}.json?auth=$idToken');
+      final dbUrl = Uri.parse('https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app/users/${user.uid}.json?auth=$idToken');
       final dbResponse = await http.patch(
         dbUrl,
         body: json.encode({'requiresPasswordChange': false}),
@@ -164,7 +164,7 @@ class _ForcePasswordChangeScreenState extends State<ForcePasswordChangeScreen> {
                 child: Container(
                   width: 500,
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceDark, // CrowdSense Dark Theme Widget color
+                    color: AppColors.surfaceDark, // VerdeSense Dark Theme Widget color
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
                     boxShadow: [
@@ -363,3 +363,4 @@ class _ForcePasswordChangeScreenState extends State<ForcePasswordChangeScreen> {
     );
   }
 }
+

@@ -6,7 +6,6 @@ import 'package:intl/intl.dart'; // Added for date formatting later
 import 'package:provider/provider.dart';
 import '../../../../core/providers/user_provider.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/page_title.dart';
 import '../../../../core/services/activity_log_service.dart';
 import '../widgets/device_management_modal.dart';
 
@@ -332,8 +331,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
       final status = (device['power_status']?.toString() ?? 'Unknown').toLowerCase();
       if (status == 'low') {
         hasLow = true;
-      } else if (status == 'adequate') hasAdequate = true;
-      else if (status == 'high') hasHigh = true;
+      } else if (status == 'adequate') {
+        hasAdequate = true;
+      } else if (status == 'high') {
+        hasHigh = true;
+      }
     }
 
     if (hasLow) return "Action Required: Low Power";
@@ -350,9 +352,25 @@ class _DevicesScreenState extends State<DevicesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PageTitle(
-          key: ValueKey('Page_${widget.activeIndex}'),
-          title: "Devices"
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            IconButton(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const DeviceManagementModal(),
+                );
+              },
+              icon: const Icon(Icons.add_rounded, color: Colors.white),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.primaryRose,
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         
@@ -368,6 +386,8 @@ class _DevicesScreenState extends State<DevicesScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        _buildDevicesList(),
         const SizedBox(height: 16),
 
         Row(
@@ -596,12 +616,135 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
+  Widget _buildDevicesList() {
+    if (widget.deviceData.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Column(
+      children: widget.deviceData.map((device) {
+        final isOnline = device['isOnline'] == true;
+        final name = device['location'] ?? 'Unknown Location';
+        final macAddress = device['mac'] ?? 'Unknown MAC';
+        final type = 'Multi-Sensor Node'; 
+        final powerStatus = device['power_status']?.toString() ?? 'Unknown';
+
+        IconData powerIcon;
+        Color powerColor = AppColors.textGrey;
+        if (powerStatus.toLowerCase() == 'high') {
+          powerIcon = Icons.battery_full;
+          powerColor = AppColors.statusSafe;
+        } else if (powerStatus.toLowerCase() == 'adequate') {
+          powerIcon = Icons.battery_4_bar;
+          powerColor = AppColors.statusWarning;
+        } else if (powerStatus.toLowerCase() == 'low') {
+          powerIcon = Icons.battery_alert;
+          powerColor = AppColors.statusDanger;
+        } else {
+          powerIcon = Icons.battery_unknown;
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDark,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.borderDark),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isOnline 
+                      ? AppColors.primaryRose.withValues(alpha: 0.2)
+                      : AppColors.backgroundDark,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.memory, 
+                  color: isOnline ? AppColors.primaryRose : AppColors.textGrey,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textLight,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      "$macAddress • $type",
+                      style: const TextStyle(
+                        color: AppColors.textGrey,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isOnline ? Icons.wifi : Icons.wifi_off,
+                        color: isOnline ? AppColors.primaryRose : AppColors.textGrey,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isOnline ? "Online" : "Offline",
+                        style: TextStyle(
+                          color: isOnline ? AppColors.primaryRose : AppColors.textGrey,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        powerIcon,
+                        color: powerColor,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        powerStatus,
+                        style: TextStyle(
+                          color: powerColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   void _openFilterModal() {
     // Temporary variables for modal's local state before applying
     DateTime? tempDate = selectedFilterDate;
-    List<String> tempSensors = List.from(selectedSensorTypes ?? []);
-    List<String> tempExcludedSensors = List.from(excludedSensorTypes ?? []);
-    List<String> tempPriorities = List.from(selectedPriorities ?? []);
+    List<String> tempSensors = List.from(selectedSensorTypes);
+    List<String> tempExcludedSensors = List.from(excludedSensorTypes);
+    List<String> tempPriorities = List.from(selectedPriorities);
 
     showDialog(
       context: context,
@@ -823,8 +966,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
                           Color pColor;
                           if (priority == 'High') {
                             pColor = AppColors.statusDanger;
-                          } else if (priority == 'Mid') pColor = AppColors.statusWarning;
-                          else pColor = AppColors.statusSafe;
+                          } else if (priority == 'Mid') {
+                            pColor = AppColors.statusWarning;
+                          } else {
+                            pColor = AppColors.statusSafe;
+                          }
 
                           return FilterChip(
                             label: Text(priority),
@@ -917,19 +1063,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
       };
 
       bool matchesSensor = true;
-      if ((selectedSensorTypes ?? []).isNotEmpty) {
+      if (selectedSensorTypes.isNotEmpty) {
         final rawTypes = selectedSensorTypes.map((chip) => chipToRawType[chip] ?? chip).toSet();
         matchesSensor = rawTypes.contains(log.logTypeRaw);
       }
 
       bool isExcluded = false;
-      if ((excludedSensorTypes ?? []).isNotEmpty) {
+      if (excludedSensorTypes.isNotEmpty) {
         final excludedRaw = excludedSensorTypes.map((chip) => chipToRawType[chip] ?? chip).toSet();
         isExcluded = excludedRaw.contains(log.logTypeRaw);
       }
 
       bool matchesPriority = true;
-      if ((selectedPriorities ?? []).isNotEmpty) {
+      if (selectedPriorities.isNotEmpty) {
         matchesPriority = selectedPriorities.contains(log.priority);
       }
 
@@ -1349,11 +1495,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
-  String _formatDuration(Duration duration) {
-    if (duration.inHours > 0) return '${duration.inHours}h ${duration.inMinutes.remainder(60)}m';
-    if (duration.inMinutes > 0) return '${duration.inMinutes}m';
-    return '${duration.inSeconds}s';
-  }
 
 
   void _showLogDetailsModal(BuildContext context, DeviceLog log) {
@@ -1364,7 +1505,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             : AppColors.statusSafe;
 
     final userProvider = context.read<UserProvider>();
-    final currentUserEmail = userProvider.email ?? 'Unknown';
+    final currentUserEmail = userProvider.email;
 
     showDialog(
       context: context,
@@ -2516,7 +2657,7 @@ class _AnimatedPulsingDotState extends State<_AnimatedPulsingDot> with SingleTic
 }
 
 class _BlinkingLightningIcon extends StatefulWidget {
-  const _BlinkingLightningIcon({super.key});
+  const _BlinkingLightningIcon();
 
   @override
   State<_BlinkingLightningIcon> createState() => _BlinkingLightningIconState();

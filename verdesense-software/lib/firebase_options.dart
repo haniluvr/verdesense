@@ -42,11 +42,11 @@ class DefaultFirebaseOptions {
   }
 
   static FirebaseOptions get web => FirebaseOptions(
-    apiKey: dotenv.env['FIREBASE_WEB_API_KEY'] ?? '',
+    apiKey: dotenv.env['FIREBASE_WEB_API_KEY'] ?? 'DUMMY_API_KEY_TO_BYPASS_AUTH_ERROR',
     appId: dotenv.env['FIREBASE_WEB_APP_ID'] ?? '',
     messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
     projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
-    authDomain: 'crowdsense-db.firebaseapp.com',
+    authDomain: 'verdesense.firebaseapp.com',
     databaseURL: dotenv.env['FIREBASE_DATABASE_URL'] ?? '',
     storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '',
     measurementId: 'G-FVVG32N0NE',
@@ -68,7 +68,7 @@ class DefaultFirebaseOptions {
     projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
     databaseURL: dotenv.env['FIREBASE_DATABASE_URL'] ?? '',
     storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '',
-    iosBundleId: 'com.example.crowdSense',
+    iosBundleId: 'com.example.VerdeSense',
   );
 
   static FirebaseOptions get macos => FirebaseOptions(
@@ -78,7 +78,7 @@ class DefaultFirebaseOptions {
     projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
     databaseURL: dotenv.env['FIREBASE_DATABASE_URL'] ?? '',
     storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '',
-    iosBundleId: 'com.example.crowdSense',
+    iosBundleId: 'com.example.VerdeSense',
   );
 
   static FirebaseOptions get windows => FirebaseOptions(
@@ -86,9 +86,10 @@ class DefaultFirebaseOptions {
     appId: dotenv.env['FIREBASE_WINDOWS_APP_ID'] ?? '',
     messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID'] ?? '',
     projectId: dotenv.env['FIREBASE_PROJECT_ID'] ?? '',
-    authDomain: 'crowdsense-db.firebaseapp.com',
+    authDomain: 'verdesense.firebaseapp.com',
     databaseURL: dotenv.env['FIREBASE_DATABASE_URL'] ?? '',
     storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET'] ?? '',
     measurementId: 'G-1VE4N5F9Q0',
   );
 }
+

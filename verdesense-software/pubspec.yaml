@@ -1,4 +1,4 @@
-name: crowd_sense
+name: verde_sense
 description: Intelligent Crowd Monitoring and Emergency Alert System for PUP CEA Building.
 publish_to: 'none'
 version: 1.0.0+1
@@ -12,7 +12,7 @@ dependencies:
   google_fonts: any
   fl_chart: 0.69.0
   font_awesome_flutter: any
-  animate_do: any
+  animate_do: ^3.3.4
   glassmorphism: any
   provider: any
   window_manager: any
@@ -25,6 +25,8 @@ dependencies:
   mailer: any
   flutter_dotenv: any
   cloud_functions: any
+  flutter_map: any
+  latlong2: any
 
 dev_dependencies:
   flutter_test:
@@ -35,20 +37,20 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/crowdsense_logo_blue.png"
+  image_path: "assets/images/VerdeSense_logo.png"
   min_sdk_android: 21
   web:
     generate: true
-    image_path: "assets/images/crowdsense_logo_blue.png"
+    image_path: "assets/images/VerdeSense_logo.png"
     background_color: "#0F172A"
     theme_color: "#3B82F6"
   windows:
     generate: true
-    image_path: "assets/images/crowdsense_logo_blue.png"
+    image_path: "assets/images/VerdeSense_logo.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "assets/images/crowdsense_logo_blue.png"
+    image_path: "assets/images/VerdeSense_logo.png"
 
 flutter:
   uses-material-design: true
@@ -56,4 +58,5 @@ flutter:
   assets:
     - assets/images/
     - .env
+
 

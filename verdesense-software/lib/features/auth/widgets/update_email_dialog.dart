@@ -137,10 +137,14 @@ class _UpdateEmailDialogWidgetState extends State<_UpdateEmailDialogWidget>
             // 1. Force the SDK to update its local state to the new email.
             // This is critical so that future actions (like another email change)
             // use the correct 'Original' email for security notifications.
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
-              email: _newEmailSent,
-              password: _passwordCtrl.text,
-            ).catchError((e) => debugPrint('[Polling] SDK Sync warning: $e'));
+            try {
+              await FirebaseAuth.instance.signInWithEmailAndPassword(
+                email: _newEmailSent,
+                password: _passwordCtrl.text,
+              );
+            } catch (e) {
+              debugPrint('[Polling] SDK Sync warning: $e');
+            }
 
             // 2. Patch the RTDB and finalize UI
             _patchRTDB(idToken, uid);
@@ -159,7 +163,7 @@ class _UpdateEmailDialogWidgetState extends State<_UpdateEmailDialogWidget>
 
   Future<void> _patchRTDB(String idToken, String uid) async {
     try {
-      const dbBaseUrl = 'https://crowdsense-db-default-rtdb.asia-southeast1.firebasedatabase.app';
+      const dbBaseUrl = 'https://verdesense-default-rtdb.asia-southeast1.firebasedatabase.app';
       final updateUrl = Uri.parse('$dbBaseUrl/users/$uid.json?auth=$idToken');
       final response = await http.patch(
         updateUrl,
@@ -929,3 +933,4 @@ class _CancelButton extends StatelessWidget {
     );
   }
 }
+

@@ -1,49 +1,54 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary Brand Colors
-  // Primary Brand Colors
-  static const Color primaryBlue = Color(0xFF3B82F6); // Vibrant Blue
-  static const Color primaryDark = Color(0xFF1A1F2C); // Main Background
+  // Primary Brand Colors — Deep Maroon / Burgundy Palette
+  static const Color primaryRose   = Color(0xFF9D5B65); // Muted rose/burgundy accent
+  static const Color primaryDark   = Color(0xFF1A0B0E); // Main background — near-black maroon
 
   // Secondary/Accent
-  static const Color accentBlue = Color(0xFF60A5FA); // Light Blue
-  static const Color accentCyan = Color(0xFF06B6D4); // Cyan accent
+  static const Color accentRose    = Color(0xFFB87480); // Lighter rose
+  static const Color accentMuted   = Color(0xFFA38C91); // Muted pinkish-grey
 
   // Backgrounds & Surface
-  static const Color backgroundDark = Color(0xFF0F172A); // Deep Navy/Slate (Slate 900)
-  static const Color surfaceDark = Color(0xFF1E293B); // Dark Slate Blue (Slate 800)
-  static const Color backgroundLight = Color(0xFFF8FAFC); // Very soft cool white
-  static const Color surfaceLight = Color(0xFFFFFFFF); // Pure white cards
-  static const Color surfaceGlass = Color(0x1AFFFFFF); // Semi-transparent white for glassmorphism
+  static const Color backgroundDark  = Color(0xFF1A0B0E); // Deep maroon (brand-dark)
+  static const Color surfaceDark     = Color(0xFF2A161A); // Card surface (brand-card)
+  static const Color borderDark      = Color(0xFF4A2B33); // Subtle border
+  static const Color backgroundLight = Color(0xFFF8F0F2); // Very soft warm white
+  static const Color surfaceLight    = Color(0xFFFFFFFF); // Pure white cards
+  static const Color surfaceGlass    = Color(0x1AFFFFFF); // Semi-transparent white
 
   // Text Colors
-  static const Color textLight = Color(0xFFFFFFFF);
-  static const Color textGrey = Color(0xFF9CA3AF);
-  static const Color textDark = Color(0xFF1E1E2C);
+  static const Color textLight  = Color(0xFFF3E8EA); // Warm cream-white (brand-text)
+  static const Color textGrey   = Color(0xFFA38C91); // Muted pinkish-grey
+  static const Color textDark   = Color(0xFF1E1218); // Near-black for light mode
 
-  // Status Colors
-  static const Color statusSafe = Color(0xFF10B981);    // Emerald Green
-  static const Color statusWarning = Color(0xFFF59E0B); // Amber
-  static const Color statusDanger = Color(0xFFEF4444);  // Red
-  static const Color statusInactive = Color(0xFF6B7280); // Gray
+  // Status Colors (keep functional colors sharp)
+  static const Color statusSafe     = Color(0xFF10B981); // Emerald Green
+  static const Color statusWarning  = Color(0xFFF59E0B); // Amber
+  static const Color statusDanger   = Color(0xFFEF4444); // Red
+  static const Color statusInactive = Color(0xFF6B7280); // Grey
 
-  // Gradients
+  // ── Gradients ────────────────────────────────────────────────────────────
   static const LinearGradient brandGradient = LinearGradient(
-    colors: [primaryBlue, accentBlue],
+    colors: [primaryRose, accentRose],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
+
   static const LinearGradient darkGradient = LinearGradient(
-    colors: [backgroundDark, Color(0xFF1E293B)], // Navy to Slate Blue
+    colors: [backgroundDark, Color(0xFF2A161A)], // Deep maroon → card maroon
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient lightGradient = LinearGradient(
-    colors: [Color(0xFFF9FAFB), Color(0xFFDDE6ED)], // Slight light slate and slightly more opaque cool slate
+    colors: [Color(0xFFFAF2F4), Color(0xFFEDD8DC)], // Soft warm off-white
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
+
+  // ── Backwards compat aliases (so callers of old blue names still compile) ─
+  static const Color primaryBlue = primaryRose;
+  static const Color accentBlue  = accentRose;
+  static const Color accentCyan  = accentMuted;
 }

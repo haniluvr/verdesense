@@ -1,6 +1,6 @@
-# Technical Architecture & Technology Stack
+﻿# Technical Architecture & Technology Stack
 
-*Project Name:* CrowdSense: Intelligent Crowd Monitoring and Emergency Alert System
+*Project Name:* VerdeSense: Intelligent Crowd Monitoring and Emergency Alert System
 *Architecture Pattern:* IoT & Mobile Client (Serverless Cloud Architecture)
 *Version:* 1.0 (Prototyping Phase)
 *Deployment Status:* Development 

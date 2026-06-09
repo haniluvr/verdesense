@@ -11,7 +11,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/user_provider.dart';
 import '../../auth/services/auth_service.dart';
-import '../widgets/people_counter_card.dart';
+
 import 'users_management_screen.dart';
 import '../../../../core/providers/siren_provider.dart';
 
@@ -22,8 +22,9 @@ import '../../../../core/widgets/page_title.dart';
 import '../../../../core/services/activity_log_service.dart';
 import 'analytics_screen.dart';
 import 'devices_screen.dart';
-import 'settings_screen.dart';
-import 'profile_screen.dart';
+import 'map_screen.dart';
+import 'override_siren_screen.dart';
+import 'profile_menu_screen.dart';
 import '../widgets/notifications_panel.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -34,8 +35,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen>
-    with SingleTickerProviderStateMixin {
-  late final List<ScrollController> _tabScrollControllers = List.generate(5, (index) => ScrollController()..addListener(_onScroll));
+    with TickerProviderStateMixin {
+  late final List<ScrollController> _tabScrollControllers = List.generate(6, (index) => ScrollController()..addListener(_onScroll));
   bool _isScrolled = false;
   bool _isBottomNavVisible = true;
   int _currentIndex = 0;
@@ -64,11 +65,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // --- User Presence State ---
   StreamSubscription? _usersSubscription;
-  int _adminsOnline = 0;
-  int _facilitatorsOnline = 0;
+
 
   int _serverTimeOffset = 0;
   StreamSubscription? _offsetSubscription;
+
+  // --- FAB Pulse Animation ---
+  late final AnimationController _fabPulseController;
+  late final Animation<double> _fabPulseAnim;
 
   @override
   void initState() {
@@ -79,6 +83,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     // operation with generous delays so each channel is fully initialized
     // before the next one starts.
     _staggeredInit();
+
+    // FAB pulse — continuous repeating animation for the siren glow rings
+    _fabPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _fabPulseAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fabPulseController, curve: Curves.easeOut),
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -102,6 +115,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void dispose() {
+    _fabPulseController.dispose();
     _heartbeatTimer?.cancel();
     _prototypeUnitsSubscription?.cancel();
     _sensorDataSubscription?.cancel();
@@ -148,7 +162,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Padding(
         padding: EdgeInsets.fromLTRB(
             20,
-            MediaQuery.of(context).padding.top + kToolbarHeight + 10,
+            MediaQuery.of(context).padding.top + 100,
             20,
             index == 2 ? 0 : 100),
         child: child,
@@ -194,7 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       // If it's a connectivity offline notification, write shared resolution to Firestore
       if (notif.icon == Icons.wifi_off) {
         final userProvider = context.read<UserProvider>();
-        final email = userProvider.email ?? 'Unknown';
+        final email = userProvider.email;
         ActivityLogService.markConnectivityResolved(docId: id, resolvedByEmail: email);
         // The Firestore stream will update the notification state for all users automatically
       } else {
@@ -315,11 +329,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _handleNotificationTap(String id) {
     // 1. Determine the target tab based on the notification type
-    int targetTab = 3; // Default to Devices
+    int targetTab = 3; // Default to Devices (index 3)
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index != -1) {
       final notif = _notifications[index];
-      // Hazard alerts go to the Alerts tab (index 2)
+      // Siren/hazard alerts go to Override Siren tab (index 2)
       if (notif.isUrgent || 
           notif.icon == Icons.local_fire_department || 
           notif.icon == Icons.smoking_rooms || 
@@ -348,6 +362,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     // 3. Highlight/Scroll logic ONLY if going to Devices tab
     if (targetTab == 3) {
       Future.delayed(const Duration(milliseconds: 150), () {
+        if (!mounted) return;
         final keyContext = _highlightedItemKey?.currentContext;
         if (keyContext != null) {
           Scrollable.ensureVisible(
@@ -517,13 +532,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                _deviceDataMap[mac]!['last_reset_hour'] = data['last_reset_hour'];
                _deviceDataMap[mac]!['device_status'] = data['device_status'];
                _deviceDataMap[mac]!['power_status'] = data['power_status'];
+               _deviceDataMap[mac]!['temperature'] = data['temperature'] ?? 0.0;
+               _deviceDataMap[mac]!['gas'] = data['gas'] ?? 0;
 
                // --- Hazard state transition logging ---
                final location = _deviceDataMap[mac]?['location'] ?? 'Unknown';
 
-               final bool curFlame = data['flame_detected'] == true;
-               final bool curGas = data['gas_detected'] == true;
-               final bool curSiren = data['siren_active'] == true;
+               // Map actual RTDB field names written by the hardware:
+               //   main_flame  → bool (false = flame detected with active-LOW sensor)
+               //   backup_flame → int  (analog ADC; detected when value <= flameThreshold)
+               //   gas         → int  (analog ADC; detected when value >= gasThreshold default 500)
+               //   siren_alert_active → bool (evacuation siren)
+               final bool curFlame = data['main_flame'] == false ||
+                   (data['backup_flame'] != null &&
+                       (data['backup_flame'] as num) <= 2000);
+               final bool curGas =
+                   (data['gas'] as num? ?? 0) >= 500;
+               final bool curSiren = data['siren_alert_active'] == true;
+
+               _deviceDataMap[mac]!['isDanger'] = curFlame || curGas || curSiren;
 
                // Only log transitions AFTER the first snapshot baseline is set
                if (_sensorBaselineLoaded) {
@@ -533,7 +560,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                    Future.microtask(() => ActivityLogService.logFlameDetected(
                      deviceMAC: mac, location: location,
                      sensorType: 'backup_analog',
-                     rawValue: (data['flame'] as num?)?.toInt(),
+                     rawValue: (data['backup_flame'] as num?)?.toInt(),
                    ));
                  } else if (!curFlame && prevFlame) {
                    Future.microtask(() => ActivityLogService.logFlameCleared(deviceMAC: mac, location: location));
@@ -553,7 +580,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                  if (curSiren && !prevSiren) {
                    Future.microtask(() => ActivityLogService.logSirenActivated(
                      deviceMAC: mac, location: location,
-                     flameValue: (data['flame'] as num?)?.toInt() ?? 0,
+                     flameValue: (data['backup_flame'] as num?)?.toInt() ?? 0,
                      gasValue: (data['gas'] as num?)?.toInt() ?? 0,
                    ));
                  } else if (!curSiren && prevSiren) {
@@ -575,13 +602,16 @@ class _DashboardScreenState extends State<DashboardScreen>
          // --- Remote siren state sync (runs OUTSIDE setState) ---
          // Aggregate siren flags across ALL devices to detect ESP32 auto-triggers
          bool anyAlertActive = false;
+         bool anyClearActive = false;
          map.forEach((key, val) {
            final mac = key.toString();
            if (!_deviceDataMap.containsKey(mac)) return;
            final data = val as Map;
            if (data['siren_alert_active'] == true) anyAlertActive = true;
+           if (data['siren_clear_active'] == true) anyClearActive = true;
          });
 
+         if (!mounted) return;
          final sirenProvider = context.read<SirenProvider>();
 
          if (anyAlertActive && sirenProvider.activeSirenTitle != "EVACUATION SIREN") {
@@ -591,10 +621,9 @@ class _DashboardScreenState extends State<DashboardScreen>
              Icons.warning_amber_rounded,
              AppColors.statusDanger,
            );
-           
+
            if (!_isSirenDialogShowing) {
              _isSirenDialogShowing = true;
-             // Show the siren dialog automatically
              Future.microtask(() async {
                if (mounted) {
                  await SirenActiveDialog.show(context, sirenProvider);
@@ -609,10 +638,44 @@ class _DashboardScreenState extends State<DashboardScreen>
              });
            }
          } else if (!anyAlertActive && sirenProvider.activeSirenTitle == "EVACUATION SIREN") {
-           // Sirens deactivated remotely (ESP32 timeout or clear) — sync UI
+           // Evacuation siren deactivated remotely (ESP32 timeout or clear) — sync UI
            sirenProvider.deactivateSirenFromRemote();
-           
-           // If the dialog is open, we pop it since the emergency cleared itself
+
+           if (_isSirenDialogShowing && mounted) {
+             Navigator.of(context, rootNavigator: true).pop();
+             _isSirenDialogShowing = false;
+           }
+         }
+
+         // --- Safety Alert remote sync (Issue #6 fix) ---
+         // ESP32 auto-transitions from evacuation → safety alert:
+         // sync the Safety Alert banner to the app UI without writing back to Firebase.
+         if (anyClearActive && sirenProvider.activeSirenTitle != "SAFETY ALERT") {
+           sirenProvider.activateSirenFromRemote(
+             "SAFETY ALERT",
+             Icons.health_and_safety_rounded,
+             AppColors.statusWarning,
+           );
+
+           if (!_isSirenDialogShowing) {
+             _isSirenDialogShowing = true;
+             Future.microtask(() async {
+               if (mounted) {
+                 await SirenActiveDialog.show(context, sirenProvider);
+                 if (mounted) {
+                   setState(() {
+                     _isSirenDialogShowing = false;
+                   });
+                 }
+               } else {
+                 _isSirenDialogShowing = false;
+               }
+             });
+           }
+         } else if (!anyClearActive && sirenProvider.activeSirenTitle == "SAFETY ALERT") {
+           // Safety alert cleared remotely
+           sirenProvider.deactivateSirenFromRemote();
+
            if (_isSirenDialogShowing && mounted) {
              Navigator.of(context, rootNavigator: true).pop();
              _isSirenDialogShowing = false;
@@ -654,16 +717,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
         if (mounted) {
           setState(() {
-            _adminsOnline = admins;
-            _facilitatorsOnline = facilitators;
+            // Intentionally empty: Variables were removed because they were never used elsewhere.
           });
         }
       } else {
         // Handle null or invalid data
         if (mounted) {
           setState(() {
-            _adminsOnline = 0;
-            _facilitatorsOnline = 0;
+            // Intentionally empty.
           });
         }
       }
@@ -721,6 +782,9 @@ class _DashboardScreenState extends State<DashboardScreen>
            'priority': v['priority'] ?? 999,
            'include_in_headcount': v['include_in_headcount'] ?? true,
            'power_status': v['power_status'],
+           'temperature': v['temperature'] ?? 0.0,
+           'gas': v['gas'] ?? 0,
+           'isDanger': v['isDanger'] == true,
         };
     }).toList();
 
@@ -932,12 +996,24 @@ class _DashboardScreenState extends State<DashboardScreen>
     
   int get _totalExits => _deviceData
     .where((d) => d['include_in_headcount'] == true)
-    .fold(0, (sum, d) => sum + ((d['exits'] as num?)?.toInt() ?? 0));
+    .fold(0, (acc, d) => acc + ((d['exits'] as num?)?.toInt() ?? 0));
     
   int get _totalPeopleInside => _totalHeadcount;
 
   // New getter: Total Entries (Headcount + Exits)
   int get _liveTotalEntries => _totalHeadcount + _totalExits;
+
+  String _getScreenTitle(int index) {
+    switch (index) {
+      case 0: return "Dashboard";
+      case 1: return "Map";
+      case 2: return "Override Siren";
+      case 3: return "Devices";
+      case 4: return "Analytics";
+      case 5: return "Profile";
+      default: return "Dashboard";
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -948,22 +1024,35 @@ class _DashboardScreenState extends State<DashboardScreen>
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/images/crowdsense_logo.png',
-              height: 32,
-              width: 32,
-            ),
-            const SizedBox(width: 8),
-            const Flexible(
-              child: Text(
-                "CrowdSense",
+        toolbarHeight: 80,
+        titleSpacing: 24,
+        title: Padding(
+          padding: const EdgeInsets.only(top: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _currentIndex == 0 ? "VerdeSense" : _getScreenTitle(_currentIndex),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 28,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              if (_currentIndex == 0) ...[
+                const SizedBox(height: 3),
+                Text(
+                  "Greenhouse Monitoring System",
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         backgroundColor: _isScrolled
             ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.8)
@@ -981,11 +1070,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         titleTextStyle: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.bold,
-            fontSize: 20),
+            fontSize: 28),
         centerTitle: false,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12.0),
+            padding: const EdgeInsets.only(right: 24.0, top: 16.0),
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 6),
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -1028,139 +1117,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       });
                     },
                   ),
-                  const SizedBox(width: 2),
-                  PopupMenuButton<String>(
-                    offset: const Offset(0, 56),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    color: Theme.of(context).colorScheme.surface,
-                    icon: CircleAvatar(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                      child: Icon(Icons.person,
-                          color: Theme.of(context).colorScheme.primary),
-                    ),
-                    onSelected: (value) async {
-                      if (value == 'account') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                        );
-                      } else if (value == 'settings') {
-                        setState(() => _currentIndex = 4);
-                      } else if (value == 'logout') {
-                        showDialog(
-                          context: context,
-                          builder: (BuildContext dialogContext) {
-                            return AlertDialog(
-                              title: const Text("Log Out"),
-                              content: const Text("Log out of your account?"),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(dialogContext).pop(),
-                                  child: const Text("Cancel"),
-                                ),
-                                TextButton(
-                                  onPressed: () async {
-                                    Navigator.of(dialogContext).pop();
-                                    // 1. CAPTURE & LOG (while user data is still available)
-                                    final email = context.read<UserProvider>().email ?? '';
-                                    ActivityLogService.logUserLogout(email: email);
-                                    // 2. CLEAR PRESENCE (while still authenticated)
-                                    if (context.mounted) {
-                                      await context.read<UserProvider>().clearUser();
-                                    }
-                                    // 3. SIGN OUT
-                                    await AuthService().logout();
-                                    if (context.mounted) {
-                                      Navigator.pushNamedAndRemoveUntil(
-                                        context,
-                                        '/login',
-                                        (route) => false,
-                                      );
-                                    }
-                                  },
-                                  child: const Text(
-                                    "Log Out",
-                                    style: TextStyle(color: AppColors.statusDanger),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                      }
-                    },
-                    itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        padding: EdgeInsets.zero,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(height: 12),
-                            CircleAvatar(
-                              radius: 22,
-                              backgroundColor:
-                                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                              child: Icon(Icons.person,
-                                  size: 26,
-                                  color: Theme.of(context).colorScheme.primary),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Welcome, ${userProv.firstName}!',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Divider(
-                                height: 1,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant
-                                    .withValues(alpha: 0.2)),
-                            const SizedBox(height: 4),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'account',
-                        height: 40,
-                        child: Row(
-                          children: [
-                            Icon(Icons.person_outline,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.onSurface),
-                            const SizedBox(width: 12),
-                            Text('Profile Details',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: Theme.of(context).colorScheme.onSurface)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'logout',
-                        height: 40,
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout, size: 20, color: AppColors.statusDanger),
-                            SizedBox(width: 12),
-                            Text('Logout',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.statusDanger,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -1177,146 +1133,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                 // Index 0: Dashboard Content
                 _buildTabScrollWrapper(
                   index: 0,
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        PageTitle(
-                          key: ValueKey('Page_$_currentIndex'), 
-                          title: "Dashboard",
-                          subtitle: "Welcome, ${userProv.firstName}!",
-                        ),
-                        const SizedBox(height: 12),
-                        _buildStatsRow(),
-                        const SizedBox(height: 12),
-                        _deviceData.isEmpty 
-                          ? Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark 
-                                    ? Colors.white.withValues(alpha: 0.05) 
-                                    : Colors.black.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                    Icon(Icons.sensors_off_rounded, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                    const SizedBox(height: 16),
-                                    Text("No Devices Connected", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-                                    const SizedBox(height: 8),
-                                    Text("Add your ESP32 prototype units\nin the Device Management tab to see live data.", textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                ]
-                              ),
-                            )
-                          : Builder(builder: (context) {
-                          final int realIndex = _deviceData.indexWhere(
-                              (data) => data['location'] == _selectedLocation);
-                          return PeopleCounterCard(
-                            deviceData: _deviceData,
-                            currentIndex: realIndex != -1 ? realIndex : 0,
-                            pageController: _pageController!,
-                            onPageChanged: (index) {
-                              setState(() {
-                                _selectedLocation =
-                                    _deviceData[index % _deviceData.length]['location'];
-                              });
-                            },
-                            onPrevious: () {
-                              _pageController!.previousPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              );
-                            },
-                            onNext: () {
-                              _pageController!.nextPage(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                              );
-                            },
-                          );
-                        }),
-                        const SizedBox(height: 12),
-                        _buildCrowdCountList(),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(child: _buildRoleCard(context, "Admins Online", _adminsOnline, Icons.admin_panel_settings, AppColors.statusDanger)), // Red
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildRoleCard(context, "Facilitators Online", _facilitatorsOnline, Icons.support_agent, AppColors.statusWarning)), // Orange
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildShowUsersButton(context),
-                      ],
-                    ),
+                  child: _buildNewHomeTab(),
                 ),
-                // Index 1: Analytics
-                _buildTabScrollWrapper(
-                  index: 1,
-                  child: AnalyticsScreen(activeIndex: _currentIndex),
-                ),
-                // Index 2 (Center): Alerts & Manual Siren Control
+                // Index 1: Map
+                MapScreen(deviceData: _deviceData, activeIndex: _currentIndex),
+                // Index 2: Override Siren
                 _buildTabScrollWrapper(
                   index: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PageTitle(
-                        key: ValueKey('Page_$_currentIndex'), 
-                        title: "Override Siren"
-                      ),
-                      const SizedBox(height: 16),
-                      // Tactical command strip console
-                      _buildSirenCommandStrip(),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryBlue,
-                              borderRadius: BorderRadius.circular(2),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primaryBlue.withValues(alpha: 0.5),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "EMERGENCY OVERRIDES",
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                              Text(
-                                "MANUAL SIREN CONTROL CONSOLE",
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      _buildCircularOverrideCarousel(),
-                    ],
-                  ),
+                  child: OverrideSirenScreen(activeIndex: _currentIndex),
                 ),
+                // Index 3: Devices
                 _buildTabScrollWrapper(
                   index: 3,
                   child: DevicesScreen(
@@ -1330,11 +1156,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                     serverTimeOffset: _serverTimeOffset,
                   ),
                 ),
-                // Index 4: Settings
+                // Index 4: Analytics
                 _buildTabScrollWrapper(
                   index: 4,
-                  child: SettingsScreen(activeIndex: _currentIndex),
+                  child: AnalyticsScreen(activeIndex: _currentIndex),
                 ),
+                // Index 5: Profile
+                ProfileMenuScreen(onNavigate: (index) => setState(() => _currentIndex = index)),
               ],
             ),
           ),
@@ -1360,160 +1188,129 @@ class _DashboardScreenState extends State<DashboardScreen>
                 onResolveUrgent: (id) => _resolveUrgent(id),
               ),
             ),
+
+          // --- Fixed Floating Siren Button ---
+          // Sits above the bottom nav bar (nav bar total height ≈ 96dp incl padding)
+          Positioned(
+            bottom: 104,
+            right: 20,
+            child: _buildFloatingSirenFab(),
+          ),
         ],
       ),
-      bottomNavigationBar: Stack(
-        alignment: Alignment.bottomCenter,
-        clipBehavior: Clip.none,
-        children: [
-          // The actual Navigation Bar
-          AnimatedSlide(
-            duration: const Duration(milliseconds: 300),
-            offset: _isBottomNavVisible ? Offset.zero : const Offset(0, 1.5),
-            child: Container(
-              height: 90,
-              margin: const EdgeInsets.only(left: 16, right: 16, bottom: 20),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: _currentIndex == 2 ? 1.0 : 0.0, end: _currentIndex == 2 ? 1.0 : 0.0),
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                builder: (context, value, child) {
-                  return CustomPaint(
-                    size: Size(MediaQuery.of(context).size.width - 32, 90),
-                    painter: _AnimatedNavBarPainter(context, value),
-                  );
-                },
-              ),
-              Positioned.fill(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildNavItem(icon: Icons.home_outlined, label: "Dashboard", index: 0),
-                    _buildNavItem(icon: Icons.analytics_outlined, label: "Analytics", index: 1),
-                    SizedBox(
-                      width: 80, 
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          const SizedBox(height: 50),
-                          const SizedBox(height: 10),
-                          // Integrated Active Indicator for Alerts
-                          AnimatedOpacity(
-                            duration: const Duration(milliseconds: 300),
-                            opacity: _currentIndex == 2 ? 1.0 : 0.0,
-                            child: AnimatedScale(
-                              scale: _currentIndex == 2 ? 1.0 : 0.5,
-                              duration: const Duration(milliseconds: 300),
-                              child: Container(
-                                width: 20,
-                                height: 2.5,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  color: AppColors.primaryBlue,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppColors.primaryBlue.withValues(alpha: 0.6),
-                                      blurRadius: 8,
-                                      spreadRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+      bottomNavigationBar: AnimatedSlide(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+        offset: _isBottomNavVisible ? Offset.zero : const Offset(0, 1.5),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(left: 20, right: 20, bottom: 16, top: 8),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // ── Liquid Glass Nav Pill ──────────────────────────────────────
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(40),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                    child: Container(
+                      width: double.infinity,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(40),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.surfaceDark.withValues(alpha: 0.75)
+                            : Colors.white.withValues(alpha: 0.80),
+                        border: Border.all(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.10)
+                              : Colors.white.withValues(alpha: 0.60),
+                          width: 1.2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.28),
+                            blurRadius: 32,
+                            offset: const Offset(0, 8),
+                            spreadRadius: -4,
+                          ),
+                          BoxShadow(
+                            color: AppColors.primaryRose.withValues(alpha: 0.08),
+                            blurRadius: 20,
+                            spreadRadius: 2,
                           ),
                         ],
                       ),
-                    ),
-                    _buildNavItem(icon: Icons.devices_other, label: "Devices", index: 3),
-                    _buildNavItem(icon: Icons.settings_outlined, label: "Settings", index: 4),
-                  ],
-                ),
-              ),
-              Positioned(
-                top: -10,
-                left: MediaQuery.of(context).size.width / 2 - 16 - 32, // Parent is margin 16 left -> Center visually
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() { _currentIndex = 2; _showNotificationsPanel = false; });
-                  },
-                    child: AnimatedScale(
-                      scale: _currentIndex == 2 ? 1.12 : 1.0,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeInOut,
-                        width: 70, // Slightly larger
-                        height: 70,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.accentBlue.withValues(alpha: 0.9),
-                              AppColors.primaryBlue,
-                              const Color(0xFF2563EB), // Darker shade of primaryBlue
-                            ],
-                            center: const Alignment(0, -0.2),
-                            radius: 1.0,
-                          ),
-                          boxShadow: [
-                            // Main shadow
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withValues(alpha: _currentIndex == 2 ? 0.6 : 0.4),
-                              blurRadius: _currentIndex == 2 ? 24 : 14,
-                              offset: const Offset(0, 6),
-                              spreadRadius: _currentIndex == 2 ? 2 : 0,
-                            ),
-                            // Bloom glow (Animated smoothly via AnimatedContainer)
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withValues(alpha: _currentIndex == 2 ? 0.35 : 0.0),
-                              blurRadius: _currentIndex == 2 ? 40 : 20,
-                              spreadRadius: _currentIndex == 2 ? 8 : 0,
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            )
-                          ],
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 58,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.25),
-                                width: 1.5,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // 6 slots
+                          const int slots = 6;
+                          final slotWidth = constraints.maxWidth / slots;
+                          final double slot = _currentIndex.toDouble();
+                          return Stack(
+                            children: [
+                              // ── Animated sliding highlight pill ──────────────
+                              AnimatedPositioned(
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeInOutCubic,
+                                left: slotWidth * slot + 6,
+                                top: 8,
+                                bottom: 8,
+                                width: slotWidth - 12,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(28),
+                                    color: AppColors.primaryRose.withValues(alpha: 0.22),
+                                    border: Border.all(
+                                      color: AppColors.primaryRose.withValues(alpha: 0.40),
+                                      width: 1.0,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primaryRose.withValues(alpha: 0.18),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                            child: const Icon(
-                              Icons.notifications_active_rounded,
-                              color: Colors.white,
-                              size: 32,
-                            ),
-                          ),
-                        ),
+                              // ── Nav Items Row ──────────────────────────────────
+                              Positioned.fill(
+                                child: Row(
+                                  children: [
+                                    _buildNavItem(icon: Icons.dashboard_rounded, label: "Dashboard", index: 0),
+                                    _buildNavItem(icon: Icons.map_rounded, label: "Map", index: 1),
+                                    _buildNavItem(icon: Icons.campaign_rounded, label: "Siren", index: 2),
+                                    _buildNavItem(icon: Icons.devices_rounded, label: "Devices", index: 3),
+                                    _buildNavItem(icon: Icons.analytics_rounded, label: "Analytics", index: 4),
+                                    _buildNavItem(icon: Icons.person_rounded, label: "Profile", index: 5),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildNavItem({required IconData icon, required String label, required int index}) {
     final isSelected = _currentIndex == index;
-    final color = isSelected ? AppColors.primaryBlue : Colors.grey.withValues(alpha: 0.9);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = AppColors.primaryRose;
+    final inactiveColor = isDark
+        ? Colors.white.withValues(alpha: 0.45)
+        : Colors.black.withValues(alpha: 0.40);
 
     return Expanded(
       child: GestureDetector(
@@ -1523,43 +1320,145 @@ class _DashboardScreenState extends State<DashboardScreen>
             _showNotificationsPanel = false;
           });
         },
-        behavior: HitTestBehavior.translucent,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 10),
-            AnimatedScale(
-              scale: isSelected ? 1.15 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(icon, color: color, size: 24), // Slightly smaller icons for better balance
-            ),
-            const SizedBox(height: 16),
-            // Integrated Active Indicator
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 300),
-              opacity: isSelected ? 1.0 : 0.0,
-              child: AnimatedScale(
-                scale: isSelected ? 1.0 : 0.5,
-                duration: const Duration(milliseconds: 300),
-                child: Container(
-                  width: 20,
-                  height: 2.5,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedOpacity(
+          opacity: isSelected ? 1.0 : 0.75,
+          duration: const Duration(milliseconds: 200),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedScale(
+                scale: isSelected ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeInOutCubic,
+                child: Icon(
+                  icon,
+                  color: isSelected ? activeColor : inactiveColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? activeColor : inactiveColor,
+                  letterSpacing: 0.2,
+                ),
+                child: Text(label),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingSirenFab() {
+    final sirenProvider = context.watch<SirenProvider>();
+    final isActive = sirenProvider.isSirenActive;
+    final isOnSirenTab = _currentIndex == 2;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final Color fabColor = isActive
+        ? AppColors.statusDanger
+        : AppColors.primaryRose;
+
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      // Hide the FAB when the bottom nav itself is hidden (user scrolling down)
+      offset: _isBottomNavVisible ? Offset.zero : const Offset(0, 3),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.85, end: 1.15),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeInOut,
+        builder: (context, pulseScale, child) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Pulsing glow rings — only when a siren is active
+              if (isActive)
+                ...List.generate(3, (i) {
+                  final delay = i / 3;
+                  final rawVal = ((pulseScale - 0.85) / 0.30 - delay) % 1.0;
+                  final val = rawVal < 0 ? rawVal + 1.0 : rawVal;
+                  return Transform.scale(
+                    scale: 1.0 + val * 1.4,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: fabColor.withValues(alpha: (1.0 - val) * 0.22),
+                      ),
+                    ),
+                  );
+                }),
+              // The FAB itself
+              GestureDetector(
+                onTap: () {
+                  if (isActive) {
+                    SirenActiveDialog.show(context, sirenProvider);
+                  } else {
+                    setState(() {
+                      _currentIndex = 2; // Override Siren tab
+                      _showNotificationsPanel = false;
+                    });
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: AppColors.primaryBlue,
+                    shape: BoxShape.circle,
+                    color: isActive
+                        ? fabColor
+                        : (isDark
+                            ? AppColors.surfaceDark
+                            : Colors.white),
+                    border: Border.all(
+                      color: isOnSirenTab && !isActive
+                          ? fabColor.withValues(alpha: 0.70)
+                          : fabColor.withValues(alpha: isActive ? 0.0 : 0.45),
+                      width: 1.8,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.6),
-                        blurRadius: 8,
-                        spreadRadius: 1,
+                        color: fabColor.withValues(
+                            alpha: isActive ? 0.45 : 0.20),
+                        blurRadius: isActive ? 24 : 12,
+                        spreadRadius: isActive ? 4 : 0,
+                        offset: const Offset(0, 4),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      key: ValueKey(isActive),
+                      isActive
+                          ? Icons.power_settings_new_rounded
+                          : Icons.campaign_rounded,
+                      color: isActive
+                          ? Colors.white
+                          : fabColor,
+                      size: 24,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1780,6 +1679,469 @@ class _DashboardScreenState extends State<DashboardScreen>
               isDark: isDark,
               isPulsing: isPulsing,
               valueWidget: hazardBadge,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewHomeTab() {
+
+    final sirenProvider = context.watch<SirenProvider>();
+    final isAlertActive = sirenProvider.isSirenActive;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Status Card
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: isAlertActive
+                ? null
+                : const LinearGradient(
+                    colors: [Color(0xFF29161A), Color(0xFF1A0B0E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            color: isAlertActive ? const Color(0xFF2A161A) : null,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isAlertActive 
+                  ? AppColors.statusDanger.withValues(alpha: 0.3)
+                  : const Color(0xFF4A2B33),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Watermark
+                Positioned(
+                  right: -50,
+                  top: -70,
+                  child: Icon(
+                    isAlertActive ? Icons.shield_rounded : Icons.verified_user_rounded,
+                    size: 250,
+                    color: Colors.white.withValues(alpha: 0.03),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                  child: Column(
+                    children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isAlertActive 
+                          ? AppColors.statusDanger.withValues(alpha: 0.15)
+                          : AppColors.primaryRose.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isAlertActive ? Icons.warning_amber_rounded : Icons.verified_user_outlined,
+                      color: isAlertActive ? AppColors.statusDanger : AppColors.primaryRose,
+                      size: 36,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    isAlertActive ? "ALERT" : "SAFE",
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isAlertActive 
+                      ? "Fire detected in Main Warehouse"
+                      : "All systems operating normally",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.8),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (isAlertActive) ...[
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _currentIndex = 1; // Map tab
+                          });
+                        },
+                        icon: const Icon(Icons.location_on, color: Colors.white, size: 16),
+                        label: const Text(
+                          "View on Map",
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.statusDanger,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(50),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    const SizedBox(height: 16),
+
+        // Metrics Grid
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A161A),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF4A2B33)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.people_alt_outlined, color: Colors.white.withValues(alpha: 0.5), size: 20),
+                        ),
+                        Text(
+                          "Tracker", 
+                          style: TextStyle(
+                            color: AppColors.primaryRose.withValues(alpha: 0.8), 
+                            fontSize: 14, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      _totalPeopleInside.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "People inside",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A161A),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF4A2B33)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryRose.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.notifications_active_outlined, color: AppColors.primaryRose.withValues(alpha: 0.8), size: 20),
+                        ),
+                        Text(
+                          "Siren", 
+                          style: TextStyle(
+                            color: AppColors.primaryRose.withValues(alpha: 0.8), 
+                            fontSize: 14, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      isAlertActive ? "Active" : "Armed",
+                      style: TextStyle(
+                        color: isAlertActive ? AppColors.statusDanger : Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isAlertActive ? "Sounding now" : "Loud Alarm",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A161A),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF4A2B33)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.water_drop_outlined, color: Colors.white.withValues(alpha: 0.5), size: 20),
+                        ),
+                        Text(
+                          "Water", 
+                          style: TextStyle(
+                            color: AppColors.primaryRose.withValues(alpha: 0.8), 
+                            fontSize: 14, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      "Normal",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Irrigation level",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A161A),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF4A2B33)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.thermostat_outlined, color: Colors.white.withValues(alpha: 0.5), size: 20),
+                        ),
+                        Text(
+                          "Temperature", 
+                          style: TextStyle(
+                            color: AppColors.primaryRose.withValues(alpha: 0.8), 
+                            fontSize: 14, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      "24°C",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Optimal range",
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Active Sensors Header
+        Row(
+          children: [
+            Icon(Icons.monitor_heart_outlined, color: AppColors.primaryRose.withValues(alpha: 0.7), size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              "Active Sensors",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        
+        // Active Sensors List Wrapper
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A161A),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF4A2B33)),
+          ),
+          child: Column(
+            children: [
+              _buildActiveSensorTile(
+                name: "Main Warehouse",
+                status: "Offline",
+                isOnline: false,
+                isFirst: true,
+              ),
+              Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
+              _buildActiveSensorTile(
+                name: "Greenhouse Alpha",
+                status: "Online",
+                isOnline: true,
+              ),
+              Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
+              _buildActiveSensorTile(
+                name: "Entrance Gate",
+                status: "Online",
+                isOnline: true,
+                isLast: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildActiveSensorTile({required String name, required String status, required bool isOnline, bool isFirst = false, bool isLast = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isOnline ? AppColors.primaryRose.withValues(alpha: 0.5) : AppColors.statusDanger,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Smoke Sensor",
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF361D21),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                color: isOnline ? AppColors.primaryRose.withValues(alpha: 0.5) : AppColors.statusDanger,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -2149,7 +2511,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       builder: (context) {
                         final isDark = Theme.of(context).brightness == Brightness.dark;
                         return AlertDialog(
-                          backgroundColor: isDark ? const Color(0xFF1E2433) : Colors.white,
+                          backgroundColor: isDark ? const Color(0xFF2A161A) : Colors.white,
                           elevation: 20,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
@@ -3270,14 +3632,14 @@ class _TacticalDialButtonState extends State<_TacticalDialButton> {
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isDark ? const Color(0xFF1E2433) : Colors.white,
+                      color: isDark ? const Color(0xFF2A161A) : Colors.white,
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: isDark 
                           ? [
-                              _isPressed ? const Color(0xFF161B26) : const Color(0xFF242C3D), 
-                              _isPressed ? const Color(0xFF0F121A) : const Color(0xFF161B26)
+                              _isPressed ? const Color(0xFF1A0B0E) : const Color(0xFF2A161A), 
+                              _isPressed ? const Color(0xFF100508) : const Color(0xFF1A0B0E)
                             ]
                           : [Colors.white, const Color(0xFFE2E8F0)],
                       ),
@@ -3401,104 +3763,18 @@ class _PulsingDotState extends State<_PulsingDot>
   }
 }
 
+// _AnimatedNavBarPainter is no longer used — replaced by the Liquid Glass nav bar.
+// Kept as a stub to avoid removing the class entirely in case it's referenced elsewhere.
 class _AnimatedNavBarPainter extends CustomPainter {
   final BuildContext context;
   final double alertsAnimationValue;
   _AnimatedNavBarPainter(this.context, this.alertsAnimationValue);
 
   @override
-  void paint(Canvas canvas, Size size) {
-    // Safely get properties to avoid Null type errors during hot reload transitions
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final paint = Paint()
-      ..color = isDark ? AppColors.surfaceDark : Colors.white
-      ..style = PaintingStyle.fill;
-
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: isDark ? 0.35 : 0.12)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
-
-    final path = Path();
-    final double w = size.width;
-    final double h = size.height;
-
-    // Rim Light Paint
-    final rimLightPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          (isDark ? Colors.white : Colors.black).withValues(alpha: 0.15),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, w, 20))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    
-    final double center = w / 2;
-    
-    // Notch dimensions - smoothly expands when Alerts is active
-    final double notchRadius = 38.0 + (6.0 * alertsAnimationValue);
-    final double notchDepth = 30.0 + (6.0 * alertsAnimationValue);
-
-    path.moveTo(0, 24); // Top left radius
-    path.quadraticBezierTo(0, 0, 24, 0);
-
-    // Left line to notch
-    path.lineTo(center - notchRadius - 15, 0);
-    
-    // Notch curve (Bezier that mimics a concave well)
-    path.cubicTo(
-      center - notchRadius + 5, 0, 
-      center - notchRadius + 8, notchDepth, 
-      center, notchDepth,
-    );
-    path.cubicTo(
-      center + notchRadius - 8, notchDepth, 
-      center + notchRadius - 5, 0, 
-      center + notchRadius + 15, 0,
-    );
-
-    // Right line & top right radius
-    path.lineTo(w - 24, 0);
-    path.quadraticBezierTo(w, 0, w, 24);
-
-    // Bottom right radius
-    path.lineTo(w, h - 24);
-    path.quadraticBezierTo(w, h, w - 24, h);
-
-    // Bottom left radius
-    path.lineTo(24, h);
-    path.quadraticBezierTo(0, h, 0, h - 24);
-    path.close();
-
-    // Draw shadow then shape
-    canvas.drawPath(path, shadowPaint);
-    canvas.drawPath(path, paint);
-
-    // Tactical Machined Rim for the entire dock
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = isDark ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    // Subtle Rim Light on the top edge
-    canvas.drawPath(path, rimLightPaint);
-  }
+  void paint(Canvas canvas, Size size) {}
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    if (oldDelegate is! _AnimatedNavBarPainter) return true;
-    try {
-      return oldDelegate.alertsAnimationValue != alertsAnimationValue;
-    } catch (_) {
-      return true;
-    }
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _PulsingWrapper extends StatefulWidget {
@@ -3554,3 +3830,4 @@ class _PulsingWrapperState extends State<_PulsingWrapper>
     );
   }
 }
+

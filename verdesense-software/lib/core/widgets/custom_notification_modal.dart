@@ -24,7 +24,7 @@ class CustomNotificationModal {
         });
 
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final Color surfaceColor = isDark ? const Color(0xFF1E2433) : Colors.white;
+        final Color surfaceColor = isDark ? const Color(0xFF2A161A) : Colors.white;
         final Color primaryColor = customColor ??
             (isDestructive
                 ? AppColors.statusDanger
@@ -167,7 +167,7 @@ class CustomNotificationModal {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E2433) : Colors.white,
+                    color: isDark ? const Color(0xFF2A161A) : Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                         color: toastColor.withValues(alpha: 0.4), width: 1.5),
@@ -286,7 +286,7 @@ class CustomNotificationModal {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E2433) : Colors.white,
+                    color: isDark ? const Color(0xFF2A161A) : Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: toastColor.withValues(alpha: 0.4), width: 1.5),
                     boxShadow: [

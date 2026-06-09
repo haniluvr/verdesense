@@ -1,6 +1,6 @@
-# Product Requirements Document (PRD): CrowdSense
+﻿# Product Requirements Document (PRD): VerdeSense
 
-**Project Name:** CrowdSense: Intelligent Crowd Monitoring and Emergency Alert System
+**Project Name:** VerdeSense: Intelligent Crowd Monitoring and Emergency Alert System
 **Project Type:** Computer Engineering Thesis
 **Target Academic Standard:** Polytechnic University of the Philippines – College of Engineering and Architecture (PUP CEA)
 **Tech Stack:** Flutter (Frontend), Firebase RTDB + Cloud Firestore (Backend/Database), ESP32 WROOM32D (Hardware), Arduino IDE (Firmware)
@@ -11,7 +11,7 @@
 ---
 
 ## 1. Project Overview & Objective
-CrowdSense is an integrated IoT and mobile application system designed to enhance building safety and spatial management. The system utilizes an ESP32 microcontroller equipped with a Time-of-Flight (ToF) sensor to accurately monitor foot traffic in hourly intervals, alongside a suite of environmental sensors (Flame, Gas/Smoke, Temperature) to detect potential fire hazards. The mobile app serves as the centralized command center, providing building administrators with real-time dashboards, historical analytics, device management, and critical emergency alerts when environmental thresholds are breached.
+VerdeSense is an integrated IoT and mobile application system designed to enhance building safety and spatial management. The system utilizes an ESP32 microcontroller equipped with a Time-of-Flight (ToF) sensor to accurately monitor foot traffic in hourly intervals, alongside a suite of environmental sensors (Flame, Gas/Smoke, Temperature) to detect potential fire hazards. The mobile app serves as the centralized command center, providing building administrators with real-time dashboards, historical analytics, device management, and critical emergency alerts when environmental thresholds are breached.
 
 ## 2. Target Audience & User Roles
 * **Admin (e.g., Building Administrators):** Full system access. They can monitor building usage, manage ESP32 prototype units, adjust thresholds, and have the exclusive authority to create or delete user accounts (Admins and Facilitators). They can also edit their own account info.
@@ -295,8 +295,8 @@ Logged **only on state transitions** (OFFLINE → ONLINE or ONLINE → OFFLINE),
 
 | Variant | File | Capabilities |
 |---|---|---|
-| `crowdsense_8CX` | `crowdsense_8CX.ino` | Firebase-connected, VL53L8CX, NTP timestamps, dual flame sensors |
-| `crowdsense_7CX` | `crowdsense_7CX.ino` | Standalone, VL53L7CX, OLED display, WiFi AP only (no Firebase) |
+| `VerdeSense_8CX` | `VerdeSense_8CX.ino` | Firebase-connected, VL53L8CX, NTP timestamps, dual flame sensors |
+| `VerdeSense_7CX` | `VerdeSense_7CX.ino` | Standalone, VL53L7CX, OLED display, WiFi AP only (no Firebase) |
 
 ### 8.2 Pin Assignments (8CX)
 

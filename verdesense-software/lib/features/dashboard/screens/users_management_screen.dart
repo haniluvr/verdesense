@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
-import 'package:http/http.dart' as http;
-import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/page_title.dart';
 import '../../../../core/widgets/secondary_geometric_background.dart';
 import '../../../../core/widgets/custom_notification_modal.dart';
 import '../../auth/services/auth_service.dart';
@@ -187,8 +183,19 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text("Users Management",
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          toolbarHeight: 76,
+          title: const Padding(
+            padding: EdgeInsets.only(top: 16.0),
+            child: Text("User Management",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 28)),
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_rounded),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           foregroundColor: cs.onSurface,
@@ -204,8 +211,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const PageTitle(title: "System Users"),
-                    const SizedBox(height: 8),
                     Row(
                       children: [
                         _dotBadge(AppColors.statusSafe, 'Online $_onlineCount'),
@@ -308,178 +313,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                           ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // LIST VIEW LAYOUT
-  // ════════════════════════════════════════════════════════════════════════════
-  Widget _buildListView(bool isDark) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: isDark ? 0.3 : 1.0),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outline.withValues(alpha: 0.1)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: SingleChildScrollView(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                  cs.surfaceContainerHighest.withValues(alpha: isDark ? 0.4 : 0.8)),
-              dataRowMaxHeight: 70,
-              columnSpacing: 32,
-              headingTextStyle: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                  fontSize: 13),
-              columns: const [
-                DataColumn(label: Text('ID#')),
-                DataColumn(label: Text('Full Name')),
-                DataColumn(label: Text('Username')),
-                DataColumn(label: Text('Access Level')),
-                DataColumn(label: Text('Designation')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Contact')),
-                DataColumn(label: Text('Joined')),
-                DataColumn(label: Text('Actions')),
-              ],
-              rows: _filteredUsers.map((user) {
-                final role = user['role'] as String;
-                final isOnline = user['isOnline'] as bool;
-                final roleColor = role.toLowerCase() == 'admin'
-                    ? AppColors.statusDanger
-                    : AppColors.statusWarning;
-
-                return DataRow(
-                  cells: [
-                    DataCell(Text('# ${user['id']}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13))),
-                    DataCell(Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: roleColor.withValues(alpha: 0.15),
-                          child: Text(user['name'][0].toUpperCase(),
-                              style: TextStyle(
-                                  color: roleColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12)),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(user['name'],
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                      ],
-                    )),
-                    DataCell(Text('@${user['username']}',
-                        style: TextStyle(
-                            color: cs.onSurfaceVariant, fontSize: 13))),
-                    DataCell(Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                          color: roleColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Text(role.toUpperCase(),
-                          style: TextStyle(
-                              color: roleColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
-                    )),
-                    DataCell(Text(user['designation'],
-                        style: TextStyle(
-                            color: cs.onSurfaceVariant, fontSize: 13))),
-                    DataCell(Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                          color: isOnline
-                              ? AppColors.statusSafe.withValues(alpha: 0.1)
-                              : cs.onSurfaceVariant.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.circle,
-                              size: 7,
-                              color: isOnline
-                                  ? AppColors.statusSafe
-                                  : cs.onSurfaceVariant),
-                          const SizedBox(width: 5),
-                          Text(isOnline ? 'Online' : 'Offline',
-                              style: TextStyle(
-                                  color: isOnline
-                                      ? AppColors.statusSafe
-                                      : cs.onSurfaceVariant,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    )),
-                    DataCell(Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(user['email'],
-                            style: const TextStyle(fontSize: 12)),
-                        if (user['phone'].isNotEmpty)
-                          Text(user['phone'],
-                              style: TextStyle(
-                                  fontSize: 11, color: cs.onSurfaceVariant)),
-                      ],
-                    )),
-                    DataCell(Text(
-                        'Joined at ${_formatDate(user['createdAt'] as DateTime)}',
-                        style: const TextStyle(fontSize: 12))),
-                    DataCell(
-                      !_isAdmin
-                          ? const SizedBox.shrink()
-                          : PopupMenuButton<String>(
-                              icon: Icon(Icons.more_horiz,
-                                  color: cs.onSurfaceVariant.withValues(alpha: 0.5),
-                                  size: 20),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              color: isDark
-                                  ? AppColors.surfaceDark
-                                  : Colors.white,
-                              onSelected: (value) {
-                                if (value == 'delete') {
-                                  _confirmAndDeleteUser(user);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.delete_outline_rounded,
-                                          size: 18,
-                                          color: AppColors.statusDanger),
-                                      const SizedBox(width: 8),
-                                      const Text('Delete User',
-                                          style: TextStyle(
-                                              color: AppColors.statusDanger,
-                                              fontWeight: FontWeight.bold)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
           ),
         ),
       ),
@@ -969,6 +802,7 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
         isSuccess: true,
       );
     } catch (error) {
+      if (!mounted) return;
       CustomNotificationModal.show(
         context: context,
         title: "Deletion Failed",

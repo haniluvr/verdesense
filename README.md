@@ -1,6 +1,6 @@
 # VerdeSense: Real-Time IoT Hazard Detection & Occupancy Monitoring for Smart Greenhouses
 
-**VerdeSense** (formerly known as CrowdSense) is an integrated Internet of Things (IoT) and cloud-based ecosystem designed to monitor safety and occupancy in controlled agricultural greenhouses. The system actively detects environmental hazards such as smoke, gas, and fire in real-time, while simultaneously tracking the number of personnel inside the greenhouse to ensure safety and operational efficiency. 
+**VerdeSense** is an integrated Internet of Things (IoT) and cloud-based ecosystem designed to monitor safety and occupancy in controlled agricultural greenhouses. The system actively detects environmental hazards such as smoke, gas, and fire in real-time, while simultaneously tracking the number of personnel inside the greenhouse to ensure safety and operational efficiency. 
 
 By combining an ESP32-based hardware node with a cross-platform Flutter application and Firebase cloud infrastructure, VerdeSense provides automated local sirens, real-time dashboards, and robust historical data logging.
 

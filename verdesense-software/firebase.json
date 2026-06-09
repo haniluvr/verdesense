@@ -1,4 +1,4 @@
-{
+﻿{
   "hosting": {
     "public": "hosting_public",
     "ignore": [
@@ -14,14 +14,14 @@
     "platforms": {
       "android": {
         "default": {
-          "projectId": "crowdsense-db",
+          "projectId": "VerdeSense-db",
           "appId": "1:992833737006:android:33b938d19c45288defaabf",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "dart": {
         "lib/firebase_options.dart": {
-          "projectId": "crowdsense-db",
+          "projectId": "VerdeSense-db",
           "configurations": {
             "android": "1:992833737006:android:33b938d19c45288defaabf",
             "ios": "1:992833737006:ios:ca3ca4bb2a09f0c0efaabf",

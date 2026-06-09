@@ -5,8 +5,9 @@ import 'dart:ui' as ui;
 class PageTitle extends StatefulWidget {
   final String title;
   final String? subtitle;
+  final Widget? trailing;
 
-  const PageTitle({super.key, required this.title, this.subtitle});
+  const PageTitle({super.key, required this.title, this.subtitle, this.trailing});
 
   @override
   State<PageTitle> createState() => _PageTitleState();
@@ -99,6 +100,10 @@ class _PageTitleState extends State<PageTitle> with SingleTickerProviderStateMix
             ),
           ),
         ),
+        if (widget.trailing != null) ...[
+          const SizedBox(width: 16),
+          widget.trailing!,
+        ],
       ],
     );
   }

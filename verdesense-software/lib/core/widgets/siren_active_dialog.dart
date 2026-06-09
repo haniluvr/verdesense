@@ -15,7 +15,7 @@ class SirenActiveDialog {
       builder: (dialogContext) {
         final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
         return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF161B26) : Colors.white,
+          backgroundColor: isDark ? const Color(0xFF2A161A) : Colors.white,
           elevation: 30,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(28),
