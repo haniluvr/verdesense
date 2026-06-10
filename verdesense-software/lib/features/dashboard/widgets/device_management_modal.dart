@@ -26,6 +26,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
 
   final TextEditingController _macController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _latController = TextEditingController();
+  final TextEditingController _lngController = TextEditingController();
   bool _isReordering = false;
   bool _isProcessing = false;
 
@@ -145,6 +147,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
     _offsetSubscription?.cancel();
     _macController.dispose();
     _nameController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
     super.dispose();
   }
 
@@ -188,13 +192,21 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
                if (!sensorsStrMap.containsKey('sync_count')) {
                   sensorsStrMap['sync_count'] = false;
                }
+               if (!sensorsStrMap.containsKey('latitude')) {
+                  sensorsStrMap['latitude'] = 14.5985;
+               }
+               if (!sensorsStrMap.containsKey('longitude')) {
+                  sensorsStrMap['longitude'] = 121.0051;
+               }
                device['sensors'] = sensorsStrMap;
             } else if (!device.containsKey('sensors')) {
                device['sensors'] = <String, dynamic>{
                    "smoke_threshold": 300.0,
                   "flame_threshold": 200.0,
                   "include_in_headcount": true,
-                  "sync_count": false
+                  "sync_count": false,
+                  "latitude": 14.5985,
+                  "longitude": 121.0051
                };
             }
 
@@ -214,6 +226,12 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
               }
               if (sensorInfo['flame_threshold'] != null) {
                 newSensors['flame_threshold'] = (sensorInfo['flame_threshold'] as num).toDouble();
+              }
+              if (sensorInfo['latitude'] != null) {
+                newSensors['latitude'] = (sensorInfo['latitude'] as num).toDouble();
+              }
+              if (sensorInfo['longitude'] != null) {
+                newSensors['longitude'] = (sensorInfo['longitude'] as num).toDouble();
               }
               device['sensors'] = newSensors;
             } else {
@@ -276,6 +294,12 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
                 if (sensorInfo['flame_threshold'] != null) {
                   newSensors['flame_threshold'] = (sensorInfo['flame_threshold'] as num).toDouble();
                 }
+                if (sensorInfo['latitude'] != null) {
+                  newSensors['latitude'] = (sensorInfo['latitude'] as num).toDouble();
+                }
+                if (sensorInfo['longitude'] != null) {
+                  newSensors['longitude'] = (sensorInfo['longitude'] as num).toDouble();
+                }
                 updatedDevice['sensors'] = newSensors;
                 return updatedDevice;
               }
@@ -287,7 +311,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
     });
   }
 
-  Future<void> _addDeviceToFirebase(String mac, String name) async {
+  Future<void> _addDeviceToFirebase(String mac, String name, double lat, double lng) async {
     try {
       await _dbRef.child('prototype_units').child(mac).set({
         "name": name,
@@ -298,6 +322,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
            "include_in_headcount": true,
            "sync_count": false,
            "priority": _devices.length,
+           "latitude": lat,
+           "longitude": lng,
          }
       });
       // Pre-initialize sensor data with all Arduino-written fields
@@ -309,6 +335,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
         "flame": 0,
         "smoke_threshold": 300.0,
         "flame_threshold": 200.0,
+        "latitude": lat,
+        "longitude": lng,
         "last_updated": DateTime.now().millisecondsSinceEpoch,
         "siren_alert_active": false,
         "siren_clear_active": false,
@@ -364,6 +392,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
 
     String mac = _macController.text.trim().toUpperCase();
     final String name = _nameController.text.trim();
+    final double lat = double.tryParse(_latController.text.trim()) ?? 14.5985;
+    final double lng = double.tryParse(_lngController.text.trim()) ?? 121.0051;
 
     // Sanitize and auto-format
     mac = mac.replaceAll('-', ':').replaceAll(' ', '');
@@ -392,10 +422,12 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
       debugPrint("DB URL: ${FirebaseDatabase.instance.app.options.databaseURL}");
       debugPrint("------------------------");
 
-      await _addDeviceToFirebase(mac, name);
+      await _addDeviceToFirebase(mac, name, lat, lng);
 
       _macController.clear();
       _nameController.clear();
+      _latController.clear();
+      _lngController.clear();
       
       if (mounted) {
         FocusScope.of(context).unfocus();
@@ -497,6 +529,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
         await _dbRef.child('sensor_data').child(oldMac).update({
           "smoke_threshold": newSensors["smoke_threshold"],
           "flame_threshold": newSensors["flame_threshold"],
+          "latitude": newSensors["latitude"],
+          "longitude": newSensors["longitude"],
         });
       } else {
         final protoSnapshot = await _dbRef.child('prototype_units').child(oldMac).get();
@@ -514,6 +548,8 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
            final newSensorData = Map<String, dynamic>.from(baseSensorData);
            newSensorData["smoke_threshold"] = newSensors["smoke_threshold"];
            newSensorData["flame_threshold"] = newSensors["flame_threshold"];
+           newSensorData["latitude"] = newSensors["latitude"];
+           newSensorData["longitude"] = newSensors["longitude"];
            await _dbRef.child('sensor_data').child(newMac).set(newSensorData);
         }
 
@@ -740,6 +776,46 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _latController,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: "LATITUDE",
+                    labelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85)),
+                    hintText: "14.5985",
+                    prefixIcon: Icon(Icons.explore_rounded, color: AppColors.primaryBlue.withValues(alpha: 0.7), size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.5),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _lngController,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: "LONGITUDE",
+                    labelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85)),
+                    hintText: "121.0051",
+                    prefixIcon: Icon(Icons.explore_rounded, color: AppColors.primaryBlue.withValues(alpha: 0.7), size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.5),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
@@ -890,6 +966,8 @@ class _EditableDeviceTile extends StatefulWidget {
 class _EditableDeviceTileState extends State<_EditableDeviceTile> {
   late TextEditingController _macCtrl;
   late TextEditingController _nameCtrl;
+  late TextEditingController _latCtrl;
+  late TextEditingController _lngCtrl;
   Timer? _heartbeatTimer;
    late double _smokeThresh;
    late double _flameThresh;
@@ -902,6 +980,8 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
     _macCtrl = TextEditingController(text: widget.device["macAddress"]);
     _nameCtrl = TextEditingController(text: widget.device["name"]);
     final sensors = widget.device["sensors"] as Map<String, dynamic>;
+    _latCtrl = TextEditingController(text: (sensors["latitude"] ?? 14.5985).toString());
+    _lngCtrl = TextEditingController(text: (sensors["longitude"] ?? 121.0051).toString());
     _smokeThresh = (sensors["smoke_threshold"] ?? 300.0).toDouble().clamp(0.0, 2000.0);
     _flameThresh = (sensors["flame_threshold"] ?? 200.0).toDouble().clamp(0.0, 4095.0);
     _includeInHeadcount = (sensors["include_in_headcount"] ?? true) as bool;
@@ -938,6 +1018,14 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
         _nameCtrl.text = widget.device["name"];
       });
     }
+    
+    if (oldSensors["latitude"] != newSensors["latitude"] ||
+        oldSensors["longitude"] != newSensors["longitude"]) {
+      setState(() {
+        _latCtrl.text = (newSensors["latitude"] ?? 14.5985).toString();
+        _lngCtrl.text = (newSensors["longitude"] ?? 121.0051).toString();
+      });
+    }
   }
 
   @override
@@ -945,6 +1033,8 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
     _heartbeatTimer?.cancel();
     _macCtrl.dispose();
     _nameCtrl.dispose();
+    _latCtrl.dispose();
+    _lngCtrl.dispose();
     super.dispose();
   }
 
@@ -1061,6 +1151,12 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
                         color: isLive ? AppColors.statusSafe : AppColors.textGrey,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 14,
+                      color: (isLive ? AppColors.statusSafe : AppColors.textGrey).withValues(alpha: 0.8),
+                    ),
                   ],
                 ),
               ),
@@ -1096,6 +1192,40 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
                 fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.5),
                 isDense: true,
               ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _latCtrl,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: "Latitude",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      filled: true,
+                      fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.5),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _lngCtrl,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: "Longitude",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      filled: true,
+                      fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.5),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ],
             ),
             
             const SizedBox(height: 24),
@@ -1239,10 +1369,12 @@ class _EditableDeviceTileState extends State<_EditableDeviceTile> {
                          newMac, 
                          _nameCtrl.text.trim(), 
                          {
-                            "smoke_threshold": _smokeThresh,
+                             "smoke_threshold": _smokeThresh,
                             "flame_threshold": _flameThresh,
                             "include_in_headcount": _includeInHeadcount,
                             "sync_mac": _syncMac,
+                            "latitude": double.tryParse(_latCtrl.text.trim()) ?? 14.5985,
+                            "longitude": double.tryParse(_lngCtrl.text.trim()) ?? 121.0051,
                          }
                       );
                     },

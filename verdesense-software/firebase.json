@@ -14,20 +14,20 @@
     "platforms": {
       "android": {
         "default": {
-          "projectId": "VerdeSense-db",
-          "appId": "1:992833737006:android:33b938d19c45288defaabf",
+          "projectId": "VerdeSense",
+          "appId": "1:770638240438:android:1a0d86b74f5b53546ba417",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "dart": {
         "lib/firebase_options.dart": {
-          "projectId": "VerdeSense-db",
+          "projectId": "VerdeSense",
           "configurations": {
-            "android": "1:992833737006:android:33b938d19c45288defaabf",
-            "ios": "1:992833737006:ios:ca3ca4bb2a09f0c0efaabf",
-            "macos": "1:992833737006:ios:ca3ca4bb2a09f0c0efaabf",
-            "web": "1:992833737006:web:e7ab2ea69dbc9b35efaabf",
-            "windows": "1:992833737006:web:852c55d9efe4633fefaabf"
+            "android": "1:770638240438:android:1a0d86b74f5b53546ba417",
+            "ios": "1:770638240438:ios:8e93578c69c4e6ea6ba417",
+            "macos": "1:770638240438:ios:8e93578c69c4e6ea6ba417",
+            "web": "1:770638240438:web:321a52abc9ec19036ba417",
+            "windows": "1:770638240438:web:321a52abc9ec19036ba417"
           }
         }
       }

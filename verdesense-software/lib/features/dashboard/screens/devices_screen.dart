@@ -352,27 +352,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const DeviceManagementModal(),
-                );
-              },
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.primaryRose,
-                padding: const EdgeInsets.all(12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+
         
         // Online / Offline count
         Row(

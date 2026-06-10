@@ -16,6 +16,49 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
 
+  @override
+  void didUpdateWidget(MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    bool shouldRecenter = false;
+    // Recenter when switching to the Map tab
+    if (widget.activeIndex == 1 && oldWidget.activeIndex != 1) {
+      shouldRecenter = true;
+    }
+    
+    // Or when new valid devices with coordinates are loaded
+    final oldValid = oldWidget.deviceData.where((d) => d['latitude'] != null && d['longitude'] != null).length;
+    final newValid = widget.deviceData.where((d) => d['latitude'] != null && d['longitude'] != null).length;
+    if (newValid > oldValid && newValid > 0) {
+      shouldRecenter = true;
+    }
+
+    if (shouldRecenter) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _recenterMap();
+      });
+    }
+  }
+
+  void _recenterMap() {
+    LatLng mapCenter = const LatLng(14.5985, 121.0051);
+    final validDevices = widget.deviceData.where((d) => d['latitude'] != null && d['longitude'] != null).toList();
+    if (validDevices.isNotEmpty) {
+      double sumLat = 0;
+      double sumLng = 0;
+      for (var d in validDevices) {
+        sumLat += (d['latitude'] as num).toDouble();
+        sumLng += (d['longitude'] as num).toDouble();
+      }
+      mapCenter = LatLng(sumLat / validDevices.length, sumLng / validDevices.length);
+      try {
+        _mapController.move(mapCenter, 17.5);
+      } catch (e) {
+        // Map controller might not be ready yet
+      }
+    }
+  }
+
   void _showSensorDetails(BuildContext context, Map<String, dynamic> zone) {
     showModalBottomSheet(
       context: context,
@@ -152,13 +195,29 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final center = const LatLng(14.5985, 121.0051);
+    LatLng mapCenter = const LatLng(14.5985, 121.0051);
+    
+    final validDevices = widget.deviceData.where((d) => d['latitude'] != null && d['longitude'] != null).toList();
+    if (validDevices.isNotEmpty) {
+      double sumLat = 0;
+      double sumLng = 0;
+      for (var d in validDevices) {
+        sumLat += (d['latitude'] as num).toDouble();
+        sumLng += (d['longitude'] as num).toDouble();
+      }
+      mapCenter = LatLng(sumLat / validDevices.length, sumLng / validDevices.length);
+    }
+
     final mappedZones = widget.deviceData.asMap().entries.map((entry) {
       final idx = entry.key;
       final device = entry.value;
+      
+      final double lat = device['latitude'] != null ? (device['latitude'] as num).toDouble() : (mapCenter.latitude + (idx * 0.0003));
+      final double lng = device['longitude'] != null ? (device['longitude'] as num).toDouble() : (mapCenter.longitude + (idx * 0.0002));
+      
       return {
         'name': device['location'] ?? 'Unknown Node',
-        'location': LatLng(center.latitude + (idx * 0.0003), center.longitude + (idx * 0.0002)),
+        'location': LatLng(lat, lng),
         'isDanger': device['isDanger'] == true,
         'temperature': device['temperature'] ?? 0.0,
         'gas': device['gas'] ?? 0,
@@ -171,8 +230,8 @@ class _MapScreenState extends State<MapScreen> {
         Positioned.fill(
           child: FlutterMap(
             mapController: _mapController,
-            options: const MapOptions(
-              initialCenter: LatLng(14.5985, 121.0051),
+            options: MapOptions(
+              initialCenter: mapCenter,
               initialZoom: 17.5,
               maxZoom: 20.0,
             ),
@@ -252,7 +311,7 @@ class _MapScreenState extends State<MapScreen> {
         // Zoom Controls
         Positioned(
           right: 16,
-          bottom: 120, // above the bottom nav bar
+          top: 130, // below Farm Overview
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -300,7 +359,7 @@ class _MapScreenState extends State<MapScreen> {
                                 const Icon(Icons.location_on, color: AppColors.primaryRose, size: 20),
                                 const SizedBox(width: 8),
                                 const Text(
-                                  "Farm Overview",
+                                  "Greenhouse Overview",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,

@@ -7,6 +7,7 @@ import '../../auth/services/auth_service.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'users_management_screen.dart';
+import 'about_app_screen.dart';
 
 class ProfileMenuScreen extends StatelessWidget {
   final Function(int) onNavigate;
@@ -153,14 +154,7 @@ class ProfileMenuScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  _buildMenuItem(
-                    icon: Icons.bar_chart_rounded,
-                    title: "Analytics",
-                    onTap: () {
-                      onNavigate(3); // Analytics tab index is 3
-                    },
-                  ),
-                  _buildDivider(),
+
                   _buildMenuItem(
                     icon: Icons.assignment_outlined,
                     title: "Activity Logs",
@@ -201,6 +195,7 @@ class ProfileMenuScreen extends StatelessWidget {
                       );
                     },
                   ),
+
                 ],
               ),
             ),

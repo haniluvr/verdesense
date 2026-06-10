@@ -172,10 +172,59 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    int totalHeadcount = 0;
+    int totalExits = 0;
+    for (final device in _devices) {
+      final sensorData = device['sensor_data'] as Map<dynamic, dynamic>? ?? {};
+      totalHeadcount += (sensorData['people_inside'] as num?)?.toInt() ?? 0;
+      totalExits += (sensorData['total_exits'] as num?)?.toInt() ?? 0;
+    }
+    int totalEntries = totalHeadcount + totalExits;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // --- SECTION 0: OCCUPANCY OVERVIEW ---
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildGlassStatCard(
+                  title: "Live Total\nHeadcount",
+                  icon: Icons.groups,
+                  color: const Color(0xFF2E7D32),
+                  isDark: isDark,
+                  valueWidget: _buildStatBadge(totalHeadcount.toString(), "REAL-TIME SYNC", const Color(0xFF2E7D32), context),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildGlassStatCard(
+                  title: "Live Total\nEntries",
+                  icon: Icons.person_add_rounded,
+                  color: const Color(0xFFF57C00),
+                  isDark: isDark,
+                  valueWidget: _buildStatBadge(totalEntries.toString(), "NO DEDUCTIONS", const Color(0xFFF57C00), context),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildGlassStatCard(
+                  title: "Current Hour\nExits",
+                  icon: Icons.directions_run,
+                  color: const Color(0xFFFF5252),
+                  isDark: isDark,
+                  valueWidget: _buildStatBadge(totalExits.toString(), "RESETS HOURLY", const Color(0xFFFF5252), context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+
         // --- SECTION 1: Emergency Sensor Trends ---
         _buildSectionTitle(context, "EMERGENCY SENSOR TRENDS"),
         const SizedBox(height: 24),
@@ -269,6 +318,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           }).toList()..add(const SizedBox(width: 4)),
         ),
         const SizedBox(height: 40),
+        
+        // --- SECTION 2: OCCUPANCY & ALERTS ANALYTICS ---
+        _buildSectionTitle(context, "OCCUPANCY & ALERTS ANALYTICS"),
+        const SizedBox(height: 24),
+        
+        SizedBox(
+          height: 320,
+          child: _buildChartCard(
+            context: context,
+            title: "Today's Occupancy",
+            icon: Icons.trending_up,
+            color: AppColors.primaryRose,
+            child: _buildOccupancyChart(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 320,
+          child: _buildChartCard(
+            context: context,
+            title: "Weekly Alerts",
+            icon: Icons.local_fire_department_outlined,
+            color: AppColors.statusDanger,
+            child: _buildWeeklyAlertsChart(),
+          ),
+        ),
+        const SizedBox(height: 40),
       ],
     );
   }
@@ -278,17 +354,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildChartCard({
     required BuildContext context,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
     required Color color,
-    required bool isLive,
+    bool? isLive,
     required Widget child,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
-      width: 320,
+      width: MediaQuery.of(context).size.width - 48,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -330,20 +406,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: colorScheme.onSurfaceVariant,
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _buildStatusBadge(isLive),
+              if (isLive != null) ...[
+                const SizedBox(width: 8),
+                _buildStatusBadge(isLive),
+              ]
             ],
           ),
           const SizedBox(height: 24),
@@ -376,7 +455,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildHorizontalSensorRow(BuildContext context, {required List<Widget> children, double height = 320}) {
+  Widget _buildHorizontalSensorRow(BuildContext context, {required List<Widget> children, double height = 380}) {
     return SizedBox(
       height: height,
       child: ScrollConfiguration(
@@ -648,7 +727,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final effectiveBackupDanger = mainFlameDetected || backupPpm <= backupThreshold;
 
     return Container(
-      width: 320,
+      width: MediaQuery.of(context).size.width - 48,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: colorScheme.surface,
@@ -774,6 +853,220 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       FlSpot(20, currentTemp),
       FlSpot(24, currentTemp),
     ];
+  }
+
+  Widget _buildGlassStatCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required bool isDark,
+    required Widget valueWidget,
+  }) {
+    final cardChild = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withValues(alpha: isDark ? 0.3 : 0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          valueWidget,
+        ],
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: cardChild,
+      ),
+    );
+  }
+
+  Widget _buildStatBadge(String value, String subtitle, Color color, BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: Theme.of(context).colorScheme.onSurface,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            color: color,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOccupancyChart() {
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 2,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(color: Colors.grey.withValues(alpha: 0.1), strokeWidth: 1);
+          },
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: 2,
+              getTitlesWidget: (value, meta) {
+                final titles = {0: '08:00', 2: '10:00', 4: '12:00', 6: '14:00', 8: '16:00', 10: '18:00'};
+                final text = titles[value.toInt()] ?? '';
+                if (text.isEmpty) return const SizedBox.shrink();
+                return SideTitleWidget(
+                  axisSide: meta.axisSide,
+                  child: Text(text, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 2,
+              reservedSize: 30,
+              getTitlesWidget: (value, meta) {
+                if (value % 2 != 0) return const SizedBox.shrink();
+                return SideTitleWidget(
+                  axisSide: meta.axisSide,
+                  child: Text('${value.toInt()}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        minX: 0,
+        maxX: 10,
+        minY: 0,
+        maxY: 10,
+        lineBarsData: [
+          LineChartBarData(
+            spots: const [
+              FlSpot(0, 2),
+              FlSpot(2, 5),
+              FlSpot(4, 8.2),
+              FlSpot(6, 6),
+              FlSpot(8, 3),
+              FlSpot(10, 1),
+            ],
+            isCurved: true,
+            color: AppColors.primaryRose,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(show: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyAlertsChart() {
+    return BarChart(
+      BarChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 1,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(color: Colors.grey.withValues(alpha: 0.1), strokeWidth: 1);
+          },
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              getTitlesWidget: (value, meta) {
+                final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                if (value >= 0 && value < 7) {
+                  return SideTitleWidget(
+                    axisSide: meta.axisSide,
+                    child: Text(days[value.toInt()], style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1,
+              reservedSize: 30,
+              getTitlesWidget: (value, meta) {
+                return SideTitleWidget(
+                  axisSide: meta.axisSide,
+                  child: Text('${value.toInt()}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        maxY: 4,
+        barGroups: [
+          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 1, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 3, barRods: [BarChartRodData(toY: 2, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 4, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 5, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+          BarChartGroupData(x: 6, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+        ],
+      ),
+    );
   }
 
 

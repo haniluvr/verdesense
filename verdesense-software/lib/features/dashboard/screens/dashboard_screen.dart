@@ -26,7 +26,7 @@ import 'map_screen.dart';
 import 'override_siren_screen.dart';
 import 'profile_menu_screen.dart';
 import '../widgets/notifications_panel.dart';
-
+import '../widgets/device_management_modal.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -496,6 +496,20 @@ class _DashboardScreenState extends State<DashboardScreen>
                    syncMac = data['config']['sync_mac']?.toString();
                }
                _deviceDataMap[mac]!['sync_mac'] = syncMac;
+
+               double? latitude;
+               double? longitude;
+               if (data.containsKey('config') && data['config'] is Map) {
+                   final c = data['config'] as Map;
+                   if (c.containsKey('latitude')) {
+                       latitude = c['latitude'] is num ? (c['latitude'] as num).toDouble() : double.tryParse(c['latitude'].toString());
+                   }
+                   if (c.containsKey('longitude')) {
+                       longitude = c['longitude'] is num ? (c['longitude'] as num).toDouble() : double.tryParse(c['longitude'].toString());
+                   }
+               }
+               _deviceDataMap[mac]!['latitude'] = latitude;
+               _deviceDataMap[mac]!['longitude'] = longitude;
             });
             _syncDeviceDataList();
          });
@@ -534,6 +548,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                _deviceDataMap[mac]!['power_status'] = data['power_status'];
                _deviceDataMap[mac]!['temperature'] = data['temperature'] ?? 0.0;
                _deviceDataMap[mac]!['gas'] = data['gas'] ?? 0;
+               
+               if (data.containsKey('latitude')) {
+                   _deviceDataMap[mac]!['latitude'] = data['latitude'] is num ? (data['latitude'] as num).toDouble() : double.tryParse(data['latitude'].toString());
+               }
+               if (data.containsKey('longitude')) {
+                   _deviceDataMap[mac]!['longitude'] = data['longitude'] is num ? (data['longitude'] as num).toDouble() : double.tryParse(data['longitude'].toString());
+               }
 
                // --- Hazard state transition logging ---
                final location = _deviceDataMap[mac]?['location'] ?? 'Unknown';
@@ -785,6 +806,8 @@ class _DashboardScreenState extends State<DashboardScreen>
            'temperature': v['temperature'] ?? 0.0,
            'gas': v['gas'] ?? 0,
            'isDanger': v['isDanger'] == true,
+           'latitude': v['latitude'],
+           'longitude': v['longitude'],
         };
     }).toList();
 
@@ -1015,6 +1038,18 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  String _getScreenSubtitle(int index) {
+    switch (index) {
+      case 0: return "Greenhouse Monitoring System";
+      case 1: return "Live sensor locations";
+      case 2: return "Manual hazard control";
+      case 3: return "Manage sensors and trackers";
+      case 4: return "Environmental data trends";
+      case 5: return "Manage your account and preferences";
+      default: return "";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProv = context.watch<UserProvider>();
@@ -1022,7 +1057,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Scaffold(
       extendBody: true,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
+      appBar: _currentIndex == 1 ? null : AppBar(
         automaticallyImplyLeading: false,
         toolbarHeight: 80,
         titleSpacing: 24,
@@ -1040,10 +1075,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-              if (_currentIndex == 0) ...[
+              if (_getScreenSubtitle(_currentIndex).isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
-                  "Greenhouse Monitoring System",
+                  _getScreenSubtitle(_currentIndex),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                     fontWeight: FontWeight.w500,
@@ -1090,6 +1125,21 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // --- Add Device Button ---
+                  IconButton(
+                    icon: Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => const DeviceManagementModal(),
+                      );
+                    },
+                  ),
                   // --- Notification Bell ---
                   IconButton(
                     icon: Badge(
@@ -1244,10 +1294,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          // 6 slots
-                          const int slots = 6;
+                          // 5 slots
+                          const int slots = 5;
                           final slotWidth = constraints.maxWidth / slots;
-                          final double slot = _currentIndex.toDouble();
+                          int activeNavSlot = 0;
+                          if (_currentIndex == 0) activeNavSlot = 0;
+                          else if (_currentIndex == 1) activeNavSlot = 1;
+                          else if (_currentIndex == 3) activeNavSlot = 2;
+                          else if (_currentIndex == 4) activeNavSlot = 3;
+                          else if (_currentIndex == 5) activeNavSlot = 4;
+                          else activeNavSlot = -1;
+
+                          final double slot = activeNavSlot != -1 ? activeNavSlot.toDouble() : 0.0;
+                          
                           return Stack(
                             children: [
                               // ── Animated sliding highlight pill ──────────────
@@ -1258,21 +1317,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 top: 8,
                                 bottom: 8,
                                 width: slotWidth - 12,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(28),
-                                    color: AppColors.primaryRose.withValues(alpha: 0.22),
-                                    border: Border.all(
-                                      color: AppColors.primaryRose.withValues(alpha: 0.40),
-                                      width: 1.0,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primaryRose.withValues(alpha: 0.18),
-                                        blurRadius: 12,
-                                        spreadRadius: 1,
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 200),
+                                  opacity: activeNavSlot != -1 ? 1.0 : 0.0,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(28),
+                                      color: AppColors.primaryRose.withValues(alpha: 0.22),
+                                      border: Border.all(
+                                        color: AppColors.primaryRose.withValues(alpha: 0.40),
+                                        width: 1.0,
                                       ),
-                                    ],
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primaryRose.withValues(alpha: 0.18),
+                                          blurRadius: 12,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1282,7 +1345,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   children: [
                                     _buildNavItem(icon: Icons.dashboard_rounded, label: "Dashboard", index: 0),
                                     _buildNavItem(icon: Icons.map_rounded, label: "Map", index: 1),
-                                    _buildNavItem(icon: Icons.campaign_rounded, label: "Siren", index: 2),
                                     _buildNavItem(icon: Icons.devices_rounded, label: "Devices", index: 3),
                                     _buildNavItem(icon: Icons.analytics_rounded, label: "Analytics", index: 4),
                                     _buildNavItem(icon: Icons.person_rounded, label: "Profile", index: 5),
@@ -1691,6 +1753,22 @@ class _DashboardScreenState extends State<DashboardScreen>
     final sirenProvider = context.watch<SirenProvider>();
     final isAlertActive = sirenProvider.isSirenActive;
 
+    double totalTemp = 0.0;
+    int tempCount = 0;
+    bool smokeDetected = false;
+    for (final device in _deviceData) {
+      if (device['isOnline'] == true) {
+         final t = (device['temperature'] as num?)?.toDouble() ?? 0.0;
+         if (t > 0) {
+           totalTemp += t;
+           tempCount++;
+         }
+         final g = (device['gas'] as num?)?.toInt() ?? 0;
+         if (g >= 500) smokeDetected = true;
+      }
+    }
+    final avgTemp = tempCount > 0 ? (totalTemp / tempCount).toStringAsFixed(1) : "0.0";
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1941,10 +2019,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             color: Colors.white.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(Icons.water_drop_outlined, color: Colors.white.withValues(alpha: 0.5), size: 20),
+                          child: Icon(Icons.smoking_rooms_outlined, color: Colors.white.withValues(alpha: 0.5), size: 20),
                         ),
                         Text(
-                          "Water", 
+                          "Smoke", 
                           style: TextStyle(
                             color: AppColors.primaryRose.withValues(alpha: 0.8), 
                             fontSize: 14, 
@@ -1954,10 +2032,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ],
                     ),
                     const SizedBox(height: 32),
-                    const Text(
-                      "Normal",
+                    Text(
+                      smokeDetected ? "Detected" : "Clear",
                       style: TextStyle(
-                        color: Colors.white,
+                        color: smokeDetected ? AppColors.statusDanger : Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                         height: 1.0,
@@ -1965,7 +2043,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      "Irrigation level",
+                      smokeDetected ? "Hazard Alert" : "Normal levels",
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.6),
                         fontSize: 14,
@@ -2010,9 +2088,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ],
                     ),
                     const SizedBox(height: 32),
-                    const Text(
-                      "24°C",
-                      style: TextStyle(
+                    Text(
+                      "${avgTemp}°C",
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
@@ -2021,7 +2099,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      "Optimal range",
+                      "Average reading",
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.6),
                         fontSize: 14,
@@ -2061,27 +2139,41 @@ class _DashboardScreenState extends State<DashboardScreen>
             border: Border.all(color: const Color(0xFF4A2B33)),
           ),
           child: Column(
-            children: [
-              _buildActiveSensorTile(
-                name: "Main Warehouse",
-                status: "Offline",
-                isOnline: false,
-                isFirst: true,
-              ),
-              Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
-              _buildActiveSensorTile(
-                name: "Greenhouse Alpha",
-                status: "Online",
-                isOnline: true,
-              ),
-              Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
-              _buildActiveSensorTile(
-                name: "Entrance Gate",
-                status: "Online",
-                isOnline: true,
-                isLast: true,
-              ),
-            ],
+            children: _deviceData.isEmpty 
+              ? [
+                  const Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Center(
+                      child: Text(
+                        "No sensors available",
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  )
+                ]
+              : List.generate(_deviceData.length, (index) {
+                  final device = _deviceData[index];
+                  final isOnline = device['isOnline'] == true;
+                  final name = device['location']?.toString() ?? 'Unknown Sensor';
+                  final type = device['type']?.toString() ?? 'Sensor Unit';
+                  final isFirst = index == 0;
+                  final isLast = index == _deviceData.length - 1;
+
+                  return Column(
+                    children: [
+                      _buildActiveSensorTile(
+                        name: name,
+                        status: isOnline ? "Online" : "Offline",
+                        isOnline: isOnline,
+                        type: type,
+                        isFirst: isFirst,
+                        isLast: isLast,
+                      ),
+                      if (!isLast)
+                        Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
+                    ],
+                  );
+                }),
           ),
         ),
         const SizedBox(height: 32),
@@ -2089,7 +2181,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildActiveSensorTile({required String name, required String status, required bool isOnline, bool isFirst = false, bool isLast = false}) {
+  Widget _buildActiveSensorTile({required String name, required String status, required bool isOnline, String type = "Sensor Unit", bool isFirst = false, bool isLast = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Row(
@@ -2119,7 +2211,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Smoke Sensor",
+                    type,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 12,
