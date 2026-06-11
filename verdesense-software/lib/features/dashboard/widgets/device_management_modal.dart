@@ -31,7 +31,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
   bool _isReordering = false;
   bool _isProcessing = false;
 
-  double _globalSmokeThresh = 500.0;
+  double _globalSmokeThresh = 1500.0;
   double _globalFlameThresh = 1000.0;
   bool _isApplyingGlobal = false;
 
@@ -201,7 +201,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
                device['sensors'] = sensorsStrMap;
             } else if (!device.containsKey('sensors')) {
                device['sensors'] = <String, dynamic>{
-                   "smoke_threshold": 300.0,
+                  "smoke_threshold": 1500.0,
                   "flame_threshold": 200.0,
                   "include_in_headcount": true,
                   "sync_count": false,
@@ -317,7 +317,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
         "name": name,
         "priority": _devices.length,
          "config": {
-           "smoke_threshold": 300.0,
+           "smoke_threshold": 1500.0,
            "flame_threshold": 200.0,
            "include_in_headcount": true,
            "sync_count": false,
@@ -333,7 +333,7 @@ class _DeviceManagementModalState extends State<DeviceManagementModal> {
         "temperature": 0.0,
         "gas": 0,
         "flame": 0,
-        "smoke_threshold": 300.0,
+        "smoke_threshold": 1500.0,
         "flame_threshold": 200.0,
         "latitude": lat,
         "longitude": lng,

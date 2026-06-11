@@ -10,7 +10,6 @@ import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/providers/user_provider.dart';
-import '../../auth/services/auth_service.dart';
 
 import 'users_management_screen.dart';
 import '../../../../core/providers/siren_provider.dart';
@@ -18,7 +17,6 @@ import '../../../../core/providers/siren_provider.dart';
 import '../../../../core/widgets/custom_notification_modal.dart';
 import '../../../../core/widgets/siren_active_dialog.dart';
 import '../../../../core/widgets/geometric_background.dart';
-import '../../../../core/widgets/page_title.dart';
 import '../../../../core/services/activity_log_service.dart';
 import 'analytics_screen.dart';
 import 'devices_screen.dart';
@@ -497,6 +495,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                }
                _deviceDataMap[mac]!['sync_mac'] = syncMac;
 
+               double smokeThreshold = 1500.0;
+               if (data.containsKey('config') && data['config'] is Map && data['config'].containsKey('smoke_threshold')) {
+                   smokeThreshold = (data['config']['smoke_threshold'] as num).toDouble();
+               }
+               _deviceDataMap[mac]!['smoke_threshold'] = smokeThreshold;
+
                double? latitude;
                double? longitude;
                if (data.containsKey('config') && data['config'] is Map) {
@@ -548,6 +552,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                _deviceDataMap[mac]!['power_status'] = data['power_status'];
                _deviceDataMap[mac]!['temperature'] = data['temperature'] ?? 0.0;
                _deviceDataMap[mac]!['gas'] = data['gas'] ?? 0;
+               final double smokeThreshold = (data['smoke_threshold'] ?? _deviceDataMap[mac]?['smoke_threshold'] ?? 1500.0).toDouble();
+               _deviceDataMap[mac]!['smoke_threshold'] = smokeThreshold;
                
                if (data.containsKey('latitude')) {
                    _deviceDataMap[mac]!['latitude'] = data['latitude'] is num ? (data['latitude'] as num).toDouble() : double.tryParse(data['latitude'].toString());
@@ -568,7 +574,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                    (data['backup_flame'] != null &&
                        (data['backup_flame'] as num) <= 2000);
                final bool curGas =
-                   (data['gas'] as num? ?? 0) >= 500;
+                   (data['gas'] as num? ?? 0) >= smokeThreshold;
                final bool curSiren = data['siren_alert_active'] == true;
 
                _deviceDataMap[mac]!['isDanger'] = curFlame || curGas || curSiren;
@@ -1764,7 +1770,8 @@ class _DashboardScreenState extends State<DashboardScreen>
            tempCount++;
          }
          final g = (device['gas'] as num?)?.toInt() ?? 0;
-         if (g >= 500) smokeDetected = true;
+         final double smokeThresh = (device['smoke_threshold'] ?? 1500.0).toDouble();
+         if (g >= smokeThresh) smokeDetected = true;
       }
     }
     final avgTemp = tempCount > 0 ? (totalTemp / tempCount).toStringAsFixed(1) : "0.0";

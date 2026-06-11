@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class SettingsProvider extends ChangeNotifier {
   double _temperatureThreshold = 38.0;
-  double _smokeThreshold = 300.0;
+  double _smokeThreshold = 1500.0;
   double _flameThreshold = 200.0;
   bool _notificationsEnabled = true;
 

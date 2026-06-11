@@ -5,8 +5,8 @@ import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/secondary_geometric_background.dart';
 import '../../../../core/providers/settings_provider.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -28,6 +28,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final Map<String, dynamic> _sensorDataCache = {};
   int _serverTimeOffset = 0;
 
+  // Dynamic Chart Data
+  List<FlSpot> _occupancySpots = [];
+  List<BarChartGroupData> _weeklyAlertsBarGroups = [];
+  StreamSubscription? _occupancySubscription;
+  StreamSubscription? _alertsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -46,9 +52,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     _listenToSensorData();
     _listenToDevices();
 
+    // TEMP DEBUG
+    _dbRef.get().then((snapshot) {
+      if (snapshot.value is Map) {
+        print('=== RTDB ROOT KEYS ===');
+        print((snapshot.value as Map).keys.toList());
+      }
+    });
+
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) setState(() {});
     });
+
+    _listenToAnalyticsData();
   }
 
   @override
@@ -57,6 +73,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     _sensorDataSubscription?.cancel();
     _offsetSubscription?.cancel();
     _heartbeatTimer?.cancel();
+    _occupancySubscription?.cancel();
+    _alertsSubscription?.cancel();
     super.dispose();
   }
 
@@ -139,6 +157,96 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           });
         }
       }
+    });
+  }
+
+  void _listenToAnalyticsData() {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final startOfWeek = now.subtract(const Duration(days: 6));
+
+    // 1. Fetch Today's Occupancy from Firestore (hourly snapshots)
+    // Even though the prompt mentioned Realtime Database, historical logs are stored in Firestore by ActivityLogService.
+    _occupancySubscription = FirebaseFirestore.instance
+        .collection('activity_logs')
+        .where('type', isEqualTo: 'tof')
+        .where('event', isEqualTo: 'hourly_snapshot')
+        .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+
+      Map<int, int> hourlyOccupancy = {};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final resetHour = data['resetHour'] as int?;
+        final entries = data['entriesThisHour'] as int? ?? 0;
+        final exits = data['exitsThisHour'] as int? ?? 0;
+        if (resetHour != null) {
+          hourlyOccupancy[resetHour] = (hourlyOccupancy[resetHour] ?? 0) + (entries - exits);
+        }
+      }
+
+      List<FlSpot> newSpots = [];
+      if (hourlyOccupancy.isNotEmpty) {
+        hourlyOccupancy.forEach((hour, netCount) {
+          if (hour >= 8 && hour <= 18) {
+            double x = (hour - 8).toDouble(); // 8AM = 0, 18:00 = 10
+            newSpots.add(FlSpot(x, math.max(0, netCount).toDouble()));
+          }
+        });
+        newSpots.sort((a, b) => a.x.compareTo(b.x));
+      }
+
+      // If no data, keep it empty. We will render a flat line if empty.
+      setState(() {
+        _occupancySpots = newSpots;
+      });
+    });
+
+    // 2. Fetch Weekly Alerts from Firestore
+    _alertsSubscription = FirebaseFirestore.instance
+        .collection('activity_logs')
+        .where('timestamp', isGreaterThanOrEqualTo: startOfWeek)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+
+      Map<int, int> alertsPerDay = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+      
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final priority = data['priority'] as String?;
+        if (priority == 'CRITICAL' || priority == 'WARNING') {
+          final timestamp = data['timestamp'] as Timestamp?;
+          if (timestamp != null) {
+            final dt = timestamp.toDate();
+            int index = dt.weekday - 1; // 0=Mon, 6=Sun
+            alertsPerDay[index] = (alertsPerDay[index] ?? 0) + 1;
+          }
+        }
+      }
+
+      List<BarChartGroupData> newBars = [];
+      for (int i = 0; i < 7; i++) {
+        newBars.add(
+          BarChartGroupData(
+            x: i,
+            barRods: [
+              BarChartRodData(
+                toY: math.min(35, alertsPerDay[i] ?? 0).toDouble(),
+                color: AppColors.statusDanger,
+                width: 24,
+                borderRadius: BorderRadius.zero,
+              )
+            ],
+          )
+        );
+      }
+
+      setState(() {
+        _weeklyAlertsBarGroups = newBars;
+      });
     });
   }
 
@@ -986,22 +1094,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         minX: 0,
         maxX: 10,
         minY: 0,
-        maxY: 10,
+        maxY: _occupancySpots.isEmpty ? 10 : null,
         lineBarsData: [
           LineChartBarData(
-            spots: const [
-              FlSpot(0, 2),
-              FlSpot(2, 5),
-              FlSpot(4, 8.2),
-              FlSpot(6, 6),
-              FlSpot(8, 3),
-              FlSpot(10, 1),
-            ],
+            spots: _occupancySpots.isNotEmpty 
+                ? _occupancySpots 
+                : const [FlSpot(0, 0), FlSpot(10, 0)],
             isCurved: true,
             color: AppColors.primaryRose,
             barWidth: 3,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: true),
+            dotData: FlDotData(show: _occupancySpots.isNotEmpty),
             belowBarData: BarAreaData(show: false),
           ),
         ],
@@ -1015,7 +1118,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: 1,
+          horizontalInterval: 5,
           getDrawingHorizontalLine: (value) {
             return FlLine(color: Colors.grey.withValues(alpha: 0.1), strokeWidth: 1);
           },
@@ -1043,28 +1146,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              interval: 1,
+              interval: 5,
               reservedSize: 30,
               getTitlesWidget: (value, meta) {
+                final intVal = value.toInt();
+                if (intVal % 5 != 0) return const SizedBox.shrink();
+                final label = intVal == 35 ? '35+' : '$intVal';
                 return SideTitleWidget(
                   axisSide: meta.axisSide,
-                  child: Text('${value.toInt()}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  child: Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                 );
               },
             ),
           ),
         ),
         borderData: FlBorderData(show: false),
-        maxY: 4,
-        barGroups: [
-          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 1, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 3, barRods: [BarChartRodData(toY: 2, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 4, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 5, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-          BarChartGroupData(x: 6, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
-        ],
+        maxY: 35,
+        barGroups: _weeklyAlertsBarGroups.isNotEmpty 
+            ? _weeklyAlertsBarGroups 
+            : [
+                BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 2, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 3, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 4, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 5, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+                BarChartGroupData(x: 6, barRods: [BarChartRodData(toY: 0, color: AppColors.statusDanger, width: 24, borderRadius: BorderRadius.zero)]),
+              ],
       ),
     );
   }
